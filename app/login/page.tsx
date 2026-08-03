@@ -1,17 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-
-import { useEffect } from 'react'
-
-// Adicione dentro do componente, antes do return:
-useEffect(() => {
-  // Se já está logado, redireciona
-  const token = localStorage.getItem('token')
-  if (token) {
-    router.push('/')
-  }
-}, [])
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -19,6 +8,13 @@ export default function Login() {
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      router.push('/')
+    }
+  }, [router])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -40,7 +36,6 @@ export default function Login() {
         return
       }
 
-      // Salvar no localStorage
       localStorage.setItem('token', data.token)
       localStorage.setItem('usuario', JSON.stringify(data.usuario))
 
@@ -62,51 +57,53 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           {erro && (
-            <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-lg">
               {erro}
             </div>
           )}
 
           <div>
-            <label className="block text-gray-300 text-sm font-medium mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
               placeholder="seu@email.com"
               required
+              disabled={loading}
             />
           </div>
 
           <div>
-            <label className="block text-gray-300 text-sm font-medium mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Senha
             </label>
             <input
               type="password"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
               placeholder="••••••••"
               required
+              disabled={loading}
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg transition"
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg transition"
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-gray-500 text-sm">
-          <p>Usuário master padrão:</p>
-          <p className="text-gray-400">master@crm.com / master123</p>
+        <div className="mt-6 pt-6 border-t border-gray-800 text-center text-sm text-gray-400">
+          <p>Credenciais padrão:</p>
+          <p className="font-mono mt-1">master@crm.com / master123</p>
         </div>
       </div>
     </div>
