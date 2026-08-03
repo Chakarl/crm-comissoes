@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import '../dashboard.css'
 
@@ -230,7 +230,7 @@ export default function DashboardPage() {
               {propostas.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                   <div style={{ fontSize: '64px', marginBottom: '20px' }}>📝</div>
-                  <h3 style={{ marginBottom: '10px', color: '#374151' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
                     Nenhuma proposta cadastrada
                   </h3>
                   <p style={{ color: '#6b7280', marginBottom: '24px' }}>
@@ -246,29 +246,42 @@ export default function DashboardPage() {
                     <thead>
                       <tr>
                         <th>Nº Proposta</th>
-                        <th>Data</th>
-                        <th>Tipo</th>
                         <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Data Fechamento</th>
                         <th>Valor Contratado</th>
                         <th>Comissão</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {propostas.slice(0, 5).map(proposta => (
+                      {propostas.slice(0, 5).map((proposta) => (
                         <tr key={proposta.id}>
-                          <td><strong>{proposta.numero_proposta}</strong></td>
-                          <td>{new Date(proposta.data_fechamento).toLocaleDateString('pt-BR')}</td>
                           <td>
-                            <span className="badge badge-primary">{proposta.tipo_contrato}</span>
+                            <span className="badge badge-primary">
+                              {proposta.numero_proposta}
+                            </span>
                           </td>
                           <td>{proposta.nome_cliente}</td>
+                          <td>{proposta.tipo_contrato}</td>
                           <td>
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proposta.valor_contratado)}
+                            {new Date(proposta.data_fechamento).toLocaleDateString('pt-BR')}
                           </td>
                           <td>
-                            <strong style={{ color: '#059669' }}>
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proposta.valor_comissao)}
-                            </strong>
+                            {new Intl.NumberFormat('pt-BR', { 
+                              style: 'currency', 
+                              currency: 'BRL' 
+                            }).format(proposta.valor_contratado)}
+                          </td>
+                          <td>
+                            <span style={{ 
+                              color: '#10b981', 
+                              fontWeight: 600 
+                            }}>
+                              {new Intl.NumberFormat('pt-BR', { 
+                                style: 'currency', 
+                                currency: 'BRL' 
+                              }).format(proposta.valor_comissao)}
+                            </span>
                           </td>
                         </tr>
                       ))}
