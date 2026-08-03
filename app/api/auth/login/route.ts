@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import bcrypt from 'bcryptjs'
 
 export async function POST(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: 'Email e senha obrigatórios' }, { status: 400 })
     }
 
-    const { data: usuario, error } = await supabase
+    const { data: usuario, error } = await supabaseAdmin
       .from('usuarios')
       .select('*')
       .eq('email', email)
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const expiraEm = new Date()
     expiraEm.setHours(expiraEm.getHours() + 8)
 
-    await supabase.from('sessoes').insert({
+    await supabaseAdmin.from('sessoes').insert({
       usuario_id: usuario.id,
       token,
       expira_em: expiraEm.toISOString()

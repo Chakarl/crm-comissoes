@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function PATCH(request: Request) {
   try {
@@ -9,7 +9,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ erro: 'Dados incompletos' }, { status: 400 })
     }
 
-    const { data: sessao } = await supabase
+    const { data: sessao } = await supabaseAdmin
       .from('sessoes')
       .select('usuario_id')
       .eq('token', token)
@@ -20,7 +20,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ erro: 'Sessão inválida' }, { status: 401 })
     }
 
-    const { data: usuario } = await supabase
+    const { data: usuario } = await supabaseAdmin
       .from('usuarios')
       .select('is_master')
       .eq('id', sessao.usuario_id)
@@ -30,7 +30,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
     }
 
-    await supabase
+    await supabaseAdmin
       .from('usuarios')
       .update({ ativo })
       .eq('id', id)

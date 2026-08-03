@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function POST(request: NextRequest) {
   try {
     const token = request.cookies.get('auth_token')?.value
 
     if (token) {
-      await supabase.from('sessoes').delete().eq('token', token)
+      await supabaseAdmin.from('sessoes').delete().eq('token', token)
     }
 
     const response = NextResponse.json({ sucesso: true })
-    
-    // Remover cookie
     response.cookies.delete('auth_token')
 
     return response
