@@ -38,10 +38,22 @@ export async function POST(request: Request) {
 
     const { senha_hash, ...usuarioSeguro } = usuario
 
-    return NextResponse.json({ 
+    // Criar resposta com cookie
+    const response = NextResponse.json({ 
       usuario: usuarioSeguro,
       token 
     })
+
+    // Salvar token em cookie HTTP-only
+    response.cookies.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 8, // 8 horas
+      path: '/'
+    })
+
+    return response
 
   } catch (error) {
     console.error('Erro no login:', error)

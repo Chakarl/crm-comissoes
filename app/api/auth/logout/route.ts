@@ -3,15 +3,18 @@ import { supabase } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   try {
-    const { token } = await request.json()
+    const token = request.cookies.get('auth_token')?.value
 
-    if (!token) {
-      return NextResponse.json({ erro: 'Token não fornecido' }, { status: 400 })
+    if (token) {
+      await supabase.from('sessoes').delete().eq('token', token)
     }
 
-    await supabase.from('sessoes').delete().eq('token', token)
+    const response = NextResponse.json({ sucesso: true })
+    
+    // Remover cookie
+    response.cookies.delete('auth_token')
 
-    return NextResponse.json({ sucesso: true })
+    return response
 
   } catch (error) {
     console.error('Erro no logout:', error)

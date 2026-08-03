@@ -10,8 +10,9 @@ export default function Login() {
   const router = useRouter()
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
+    // Se já está logado, redireciona
+    const usuario = localStorage.getItem('usuario')
+    if (usuario) {
       router.push('/')
     }
   }, [router])
@@ -25,7 +26,8 @@ export default function Login() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha })
+        body: JSON.stringify({ email, senha }),
+        credentials: 'include' // Importante para cookies
       })
 
       const data = await res.json()
@@ -36,10 +38,12 @@ export default function Login() {
         return
       }
 
+      // Salvar no localStorage também (para uso no frontend)
       localStorage.setItem('token', data.token)
       localStorage.setItem('usuario', JSON.stringify(data.usuario))
 
-      router.push('/')
+      // Redirecionar
+      window.location.href = '/'
 
     } catch (error) {
       setErro('Erro de conexão')
