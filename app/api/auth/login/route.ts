@@ -10,7 +10,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ erro: 'Email e senha obrigatórios' }, { status: 400 })
     }
 
-    // Buscar usuário
     const { data: usuario, error } = await supabase
       .from('usuarios')
       .select('*')
@@ -22,16 +21,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ erro: 'Credenciais inválidas' }, { status: 401 })
     }
 
-    // Verificar senha
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash)
     if (!senhaValida) {
       return NextResponse.json({ erro: 'Credenciais inválidas' }, { status: 401 })
     }
 
-    // Criar sessão (token simples - em produção use JWT)
     const token = crypto.randomUUID()
     const expiraEm = new Date()
-    expiraEm.setHours(expiraEm.getHours() + 8) // 8h de sessão
+    expiraEm.setHours(expiraEm.getHours() + 8)
 
     await supabase.from('sessoes').insert({
       usuario_id: usuario.id,
@@ -39,7 +36,6 @@ export async function POST(request: Request) {
       expira_em: expiraEm.toISOString()
     })
 
-    // Retornar dados sem senha
     const { senha_hash, ...usuarioSeguro } = usuario
 
     return NextResponse.json({ 

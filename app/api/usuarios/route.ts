@@ -4,13 +4,12 @@ import bcrypt from 'bcryptjs'
 
 export async function POST(request: Request) {
   try {
-    const { email, senha, nome, token, criadorId } = await request.json()
+    const { email, senha, nome, token } = await request.json()
 
     if (!email || !senha || !nome || !token) {
       return NextResponse.json({ erro: 'Dados incompletos' }, { status: 400 })
     }
 
-    // Verificar se quem está criando é master
     const { data: sessao } = await supabase
       .from('sessoes')
       .select('usuario_id')
@@ -32,10 +31,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ erro: 'Apenas o master pode criar usuários' }, { status: 403 })
     }
 
-    // Hash da senha
     const senhaHash = await bcrypt.hash(senha, 10)
 
-    // Criar usuário
     const { data, error } = await supabase
       .from('usuarios')
       .insert({
@@ -49,7 +46,7 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      if (error.code === '23505') { // duplicate key
+      if (error.code === '23505') {
         return NextResponse.json({ erro: 'Email já cadastrado' }, { status: 400 })
       }
       throw error
@@ -64,7 +61,6 @@ export async function POST(request: Request) {
   }
 }
 
-// Listar usuários (apenas master)
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -74,7 +70,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ erro: 'Token não fornecido' }, { status: 401 })
     }
 
-    // Verificar sessão
     const { data: sessao } = await supabase
       .from('sessoes')
       .select('usuario_id')
@@ -96,7 +91,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
     }
 
-    // Buscar todos os usuários
     const { data: usuarios } = await supabase
       .from('usuarios')
       .select('id, email, nome, is_master, ativo, criado_em')
