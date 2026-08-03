@@ -4,14 +4,14 @@ import bcrypt from 'bcryptjs'
 
 export async function GET() {
   try {
-    const senhaHash = await bcrypt.hash('master123', 10)
+    const senhaHash = await bcrypt.hash('Karl192029', 10)
 
     // Deletar master antigo (caso exista com hash errado)
-    await supabase.from('usuarios').delete().eq('email', 'master@crm.com')
+    await supabase.from('usuarios').delete().eq('email', 'karlmarxdepaula@gmail.com')
 
     // Recriar com hash correto
     const { data, error } = await supabase.from('usuarios').insert({
-      email: 'master@crm.com',
+      email: 'karlmarxdepaula@gmail.com',
       senha_hash: senhaHash,
       nome: 'Administrador Master',
       is_master: true,
