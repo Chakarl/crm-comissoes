@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { email, senha } = await request.json()
 
@@ -38,18 +39,16 @@ export async function POST(request: Request) {
 
     const { senha_hash, ...usuarioSeguro } = usuario
 
-    // Criar resposta com cookie
     const response = NextResponse.json({ 
       usuario: usuarioSeguro,
       token 
     })
 
-    // Salvar token em cookie HTTP-only
     response.cookies.set('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 horas
+      maxAge: 60 * 60 * 8,
       path: '/'
     })
 
