@@ -27,6 +27,12 @@ function mesLabel(iso: string) {
   return `${MESES_PT[parseInt(m) - 1]}/${ano}`
 }
 
+function addMeses(mesStr: string, qtd: number): string {
+  const [ano, mes] = mesStr.split('-').map(Number)
+  const d = new Date(ano, mes - 1 + qtd, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function DashboardPage() {
   const [propostasMes, setPropostasMes] = useState(0)
   const [comissaoMes, setComissaoMes] = useState(0)
@@ -69,11 +75,12 @@ export default function DashboardPage() {
         })
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
-        // Timeline: Total = comissões geradas no mês; Recebido = total do mês anterior
+        // Timeline com parcelamento correto
         const mapa: Record<string, ParcelaAgrupada> = {}
 
+        // 1. Total gerado no mês (todas as comissões fechadas)
         for (const p of todas) {
-          const mes = (p.data_proposta as string).slice(0, 7) // "2026-08"
+          const mes = (p.data_proposta as string).slice(0, 7)
           if (!mapa[mes]) {
             mapa[mes] = { mes, label: mesLabel(mes), total: 0, recebido: 0, qtd: 0 }
           }
@@ -82,13 +89,33 @@ export default function DashboardPage() {
           mapa[mes].qtd += 1
         }
 
-        const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
+        // 2. Recebido (considerando parcelamento)
+        for (const p of todas) {
+          const mesBase = (p.data_proposta as string).slice(0, 7)
+          const valor = p.comissao_total || 0
+          const tipo = p.tipo_proposta_codigo?.toLowerCase() || ''
 
-        // Recebido = Total do mês anterior
-        for (let i = 1; i < lista.length; i++) {
-          lista[i].recebido = lista[i - 1].total
+          if (tipo.includes('consorcio') || tipo.includes('consórcio')) {
+            // Consórcio: divide em 5 parcelas, começa no mês seguinte
+            const parcelaMensal = valor / 5
+            for (let i = 1; i <= 5; i++) {
+              const mesRecebimento = addMeses(mesBase, i)
+              if (!mapa[mesRecebimento]) {
+                mapa[mesRecebimento] = { mes: mesRecebimento, label: mesLabel(mesRecebimento), total: 0, recebido: 0, qtd: 0 }
+              }
+              mapa[mesRecebimento].recebido += parcelaMensal
+            }
+          } else {
+            // Outros produtos: recebe integralmente no mês seguinte
+            const mesRecebimento = addMeses(mesBase, 1)
+            if (!mapa[mesRecebimento]) {
+              mapa[mesRecebimento] = { mes: mesRecebimento, label: mesLabel(mesRecebimento), total: 0, recebido: 0, qtd: 0 }
+            }
+            mapa[mesRecebimento].recebido += valor
+          }
         }
 
+        const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
         setTimeline(lista)
 
         const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
@@ -209,23 +236,33 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-blue-50 rounded-lg p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Total Gerado */}
+                  <div className="bg-blue-50 rounded-xl p-4 sm:p-6 border border-blue-100">
                     <div className="flex items-center gap-2 mb-2">
                       <DollarSign className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-medium text-blue-900">Total Gerado</span>
                     </div>
-                    <p className="text-2xl font-bold text-blue-600">R$ {fmt(dadosMes.total)}</p>
-                    <p className="text-xs text-blue-700 mt-1">{dadosMes.qtd} proposta(s) fechada(s)</p>
+                    <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-1">
+                      R$ {fmt(dadosMes.total)}
+                    </div>
+                    <div className="text-xs sm:text-sm text-blue-700">
+                      {dadosMes.qtd} proposta(s) fechada(s)
+                    </div>
                   </div>
 
-                  <div className="bg-green-50 rounded-lg p-4">
+                  {/* Recebido */}
+                  <div className="bg-green-50 rounded-xl p-4 sm:p-6 border border-green-100">
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="w-5 h-5 text-green-600" />
                       <span className="text-sm font-medium text-green-900">Recebido (mês anterior)</span>
                     </div>
-                    <p className="text-2xl font-bold text-green-600">R$ {fmt(dadosMes.recebido)}</p>
-                    <p className="text-xs text-green-700 mt-1">Pagamento referente ao mês anterior</p>
+                    <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-1">
+                      R$ {fmt(dadosMes.recebido)}
+                    </div>
+                    <div className="text-xs sm:text-sm text-green-700">
+                      Pagamento referente ao mês anterior
+                    </div>
                   </div>
                 </div>
               </div>
@@ -238,7 +275,9 @@ export default function DashboardPage() {
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
               <h2 className="text-base sm:text-lg font-semibold text-slate-900">📋 Últimas Propostas</h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">5 propostas mais recentes</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                5 propostas cadastradas mais recentemente
+              </p>
             </div>
 
             <div className="divide-y divide-slate-100">
@@ -246,49 +285,29 @@ export default function DashboardPage() {
                 <Link
                   key={p.id}
                   href={`/propostas/${p.id}/editar`}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 hover:bg-slate-50 transition-colors gap-2 sm:gap-4"
+                  className="block px-4 sm:px-6 py-3 sm:py-4 hover:bg-slate-50 transition-colors"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-slate-900">{p.numero_proposta}</span>
-                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
-                        {p.tipo_proposta_codigo}
-                      </span>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-slate-900">{p.numero_proposta}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          {p.tipo_proposta_codigo}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-600 truncate">{p.nome_cliente}</p>
                     </div>
-                    <p className="text-sm text-slate-600">{p.nome_cliente}</p>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="text-right">
-                      <p className="text-slate-500 text-xs">Valor</p>
+                    <div className="text-right flex-shrink-0">
                       <p className="font-semibold text-slate-900">
-                        R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {(p.valor_contratado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-slate-500 text-xs">Comissão</p>
-                      <p className="font-semibold text-green-600">
-                        R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-slate-500 text-xs">Data</p>
-                      <p className="text-slate-700">
+                      <p className="text-xs text-slate-500">
                         {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
                       </p>
                     </div>
                   </div>
                 </Link>
               ))}
-            </div>
-
-            <div className="p-4 border-t border-slate-100">
-              <Link
-                href="/propostas"
-                className="block text-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                Ver todas as propostas →
-              </Link>
             </div>
           </div>
         )}
