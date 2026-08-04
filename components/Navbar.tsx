@@ -37,12 +37,12 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
         <div className="flex items-center justify-between">
           {/* Logo + links desktop */}
           <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="text-xl sm:text-2xl font-bold text-white">
+            <Link href="/dashboard" className="text-xl sm:text-2xl font-bold text-white whitespace-nowrap">
               CRM Comissões
             </Link>
 
             {/* Desktop */}
-            <div className="hidden md:flex gap-2">
+            <div className="hidden lg:flex gap-2">
               {links.map((link) => {
                 const Icon = link.icon
                 const isActive = pathname === link.href
@@ -50,7 +50,7 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap
                       ${isActive
                         ? 'bg-blue-600 text-white'
                         : 'text-slate-300 hover:bg-slate-800 hover:text-white'
@@ -65,7 +65,7 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
           </div>
 
           {/* User + logout desktop */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-4">
             <span className="text-slate-400 text-sm">{userName}</span>
             <button
               onClick={onLogout}
@@ -79,7 +79,7 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
           {/* Hamburguer mobile */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden text-slate-300 hover:text-white"
+            className="lg:hidden text-slate-300 hover:text-white"
           >
             {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -87,7 +87,7 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
 
         {/* Menu mobile */}
         {menuOpen && (
-          <div className="md:hidden mt-4 flex flex-col gap-2">
+          <div className="lg:hidden mt-4 flex flex-col gap-2">
             {links.map((link) => {
               const Icon = link.icon
               const isActive = pathname === link.href
@@ -107,11 +107,14 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
                 </Link>
               )
             })}
-            <div className="border-t border-slate-700 mt-2 pt-3 flex items-center justify-between px-4">
+            <div className="border-t border-slate-700 mt-2 pt-3 flex flex-col gap-3 px-4">
               <span className="text-slate-400 text-sm">{userName}</span>
               <button
-                onClick={onLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onLogout()
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm"
               >
                 <LogOut className="w-4 h-4" />
                 Sair

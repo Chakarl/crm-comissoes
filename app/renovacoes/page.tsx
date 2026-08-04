@@ -41,14 +41,17 @@ export default function RenovacoesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Alertas de Renovação</h1>
-          <p className="text-slate-600">Propostas próximas do vencimento</p>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">
+            Alertas de Renovação
+          </h1>
+          <p className="text-sm sm:text-base text-slate-600">Propostas próximas do vencimento</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {/* Desktop */}
+        <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -56,7 +59,9 @@ export default function RenovacoesPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Cliente</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Data</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Prazo</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Dias para Vencimento</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Dias para Vencimento
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -69,10 +74,13 @@ export default function RenovacoesPage() {
                   </td>
                   <td className="px-6 py-4 text-slate-700">{r.prazo_meses} meses</td>
                   <td className="px-6 py-4">
-                    <span className={`
-                      px-3 py-1 rounded-full text-xs font-medium
-                      ${r.dias_para_vencimento <= 30 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}
-                    `}>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        r.dias_para_vencimento <= 30
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
                       {r.dias_para_vencimento} dias
                     </span>
                   </td>
@@ -80,6 +88,44 @@ export default function RenovacoesPage() {
               ))}
             </tbody>
           </table>
+
+          {renovacoes.length === 0 && (
+            <div className="text-center py-12 text-slate-500">
+              <Bell className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Nenhum alerta de renovação</p>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile */}
+        <div className="lg:hidden space-y-4">
+          {renovacoes.map((r) => (
+            <div key={r.proposta_id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="font-semibold text-slate-900 text-sm">{r.numero_proposta}</p>
+                  <p className="text-slate-600 text-xs">{r.cliente_nome}</p>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                    r.dias_para_vencimento <= 30 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {r.dias_para_vencimento} dias
+                </span>
+              </div>
+              <div className="space-y-1.5 text-xs sm:text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Data:</span>
+                  <span className="text-slate-700">{new Date(r.data_proposta).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Prazo:</span>
+                  <span className="text-slate-700">{r.prazo_meses} meses</span>
+                </div>
+              </div>
+            </div>
+          ))}
 
           {renovacoes.length === 0 && (
             <div className="text-center py-12 text-slate-500">
