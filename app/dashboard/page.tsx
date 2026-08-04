@@ -68,19 +68,11 @@ export default function DashboardPage() {
           return d.getFullYear() === anoAtual
         })
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
-      }
 
-      // Timeline de parcelas/propostas por mês
-      const { data: propostas } = await supabase
-        .from('propostas')
-        .select('data_proposta, comissao_total')
-        .order('data_proposta', { ascending: true })
-
-      if (propostas && propostas.length > 0) {
+        // Timeline: Total = comissões geradas no mês; Recebido = total do mês anterior
         const mapa: Record<string, ParcelaAgrupada> = {}
 
-        // Agrupar comissões por mês de fechamento da proposta
-        for (const p of propostas) {
+        for (const p of todas) {
           const mes = (p.data_proposta as string).slice(0, 7) // "2026-08"
           if (!mapa[mes]) {
             mapa[mes] = { mes, label: mesLabel(mes), total: 0, recebido: 0, qtd: 0 }
@@ -92,7 +84,7 @@ export default function DashboardPage() {
 
         const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
 
-        // Calcular "Recebido" = Total gerado do mês anterior
+        // Recebido = Total do mês anterior
         for (let i = 1; i < lista.length; i++) {
           lista[i].recebido = lista[i - 1].total
         }
@@ -162,7 +154,7 @@ export default function DashboardPage() {
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
               <h2 className="text-base sm:text-lg font-semibold text-slate-900">📅 Comissões por Mês</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Total gerado no mês e recebido do mês anterior
+                Total gerado no mês • Recebido do mês anterior
               </p>
             </div>
 
@@ -217,16 +209,23 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="text-xs sm:text-sm text-blue-700 font-medium mb-1">Total Gerado</div>
-                    <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
-                    <div className="text-xs text-blue-600 mt-1">{dadosMes.qtd} proposta(s)</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign className="w-5 h-5 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-900">Total Gerado</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600">R$ {fmt(dadosMes.total)}</p>
+                    <p className="text-xs text-blue-700 mt-1">{dadosMes.qtd} proposta(s) fechada(s)</p>
                   </div>
 
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="text-xs sm:text-sm text-green-700 font-medium mb-1">Recebido (mês anterior)</div>
-                    <div className="text-xl sm:text-2xl font-bold text-green-900">R$ {fmt(dadosMes.recebido)}</div>
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-medium text-green-900">Recebido (mês anterior)</span>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">R$ {fmt(dadosMes.recebido)}</p>
+                    <p className="text-xs text-green-700 mt-1">Pagamento referente ao mês anterior</p>
                   </div>
                 </div>
               </div>
@@ -242,67 +241,54 @@ export default function DashboardPage() {
               <p className="text-xs sm:text-sm text-slate-500 mt-1">5 propostas mais recentes</p>
             </div>
 
-            {/* Desktop - Tabela */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Número</th>
-                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Cliente</th>
-                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Tipo</th>
-                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Data</th>
-                    <th className="text-right px-6 py-3 text-xs font-semibold text-slate-700">Valor</th>
-                    <th className="text-right px-6 py-3 text-xs font-semibold text-slate-700">Comissão</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ultimasPropostas.map((p) => (
-                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-6 py-3 text-sm font-medium text-slate-900">{p.numero_proposta}</td>
-                      <td className="px-6 py-3 text-sm text-slate-700">{p.nome_cliente}</td>
-                      <td className="px-6 py-3 text-sm text-slate-700">{p.tipo_proposta_codigo}</td>
-                      <td className="px-6 py-3 text-sm text-slate-700">
-                        {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="px-6 py-3 text-sm text-slate-700 text-right">
+            <div className="divide-y divide-slate-100">
+              {ultimasPropostas.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/propostas/${p.id}/editar`}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 hover:bg-slate-50 transition-colors gap-2 sm:gap-4"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-slate-900">{p.numero_proposta}</span>
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
+                        {p.tipo_proposta_codigo}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600">{p.nome_cliente}</p>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="text-right">
+                      <p className="text-slate-500 text-xs">Valor</p>
+                      <p className="font-semibold text-slate-900">
                         R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-6 py-3 text-sm font-semibold text-green-600 text-right">
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-slate-500 text-xs">Comissão</p>
+                      <p className="font-semibold text-green-600">
                         R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-slate-500 text-xs">Data</p>
+                      <p className="text-slate-700">
+                        {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
             </div>
 
-            {/* Mobile - Cards */}
-            <div className="sm:hidden divide-y divide-slate-100">
-              {ultimasPropostas.map((p) => (
-                <div key={p.id} className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{p.nome_cliente}</p>
-                    </div>
-                    <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded font-medium">
-                      {p.tipo_proposta_codigo}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-slate-600 mt-3">
-                    <span>{new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                    <span className="font-medium">
-                      R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-right">
-                    <span className="text-xs text-slate-500">Comissão: </span>
-                    <span className="text-sm font-bold text-green-600">
-                      R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className="p-4 border-t border-slate-100">
+              <Link
+                href="/propostas"
+                className="block text-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                Ver todas as propostas →
+              </Link>
             </div>
           </div>
         )}
