@@ -9,18 +9,15 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
-  Clock,
+  TrendingUp,
 } from 'lucide-react'
 
 interface ParcelaAgrupada {
   mes: string
   label: string
   total: number
-  pago: number
-  pendente: number
+  recebido: number
   qtd: number
-  parcelas: any[]
 }
 
 const MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -31,9 +28,9 @@ function mesLabel(iso: string) {
 }
 
 export default function DashboardPage() {
-  const [totalPropostas, setTotalPropostas] = useState(0)
+  const [propostasMes, setPropostasMes] = useState(0)
   const [comissaoMes, setComissaoMes] = useState(0)
-  const [comissaoTotal, setComissaoTotal] = useState(0)
+  const [comissaoAno, setComissaoAno] = useState(0)
   const [ultimasPropostas, setUltimasPropostas] = useState<any[]>([])
   const [timeline, setTimeline] = useState<ParcelaAgrupada[]>([])
   const [mesSelecionado, setMesSelecionado] = useState<string | null>(null)
@@ -46,28 +43,40 @@ export default function DashboardPage() {
 
   const loadDashboard = async () => {
     try {
+      const now = new Date()
+      const anoAtual = now.getFullYear()
+      const mesAtual = now.getMonth()
+
+      // Propostas
       const { data: todas } = await supabase
         .from('propostas')
         .select('id, comissao_total, data_proposta, numero_proposta, nome_cliente, tipo_proposta_codigo, valor_contratado')
         .order('data_proposta', { ascending: false })
 
       if (todas) {
-        setTotalPropostas(todas.length)
+        // Últimas 5 propostas
         setUltimasPropostas(todas.slice(0, 5))
-        const total = todas.reduce((acc, p) => acc + (p.comissao_total || 0), 0)
-        setComissaoTotal(total)
 
-        const now = new Date()
-        const mesAtual = todas.filter((p) => {
+        // Propostas do mês atual
+        const doMes = todas.filter((p) => {
           const d = new Date(p.data_proposta)
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+          return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
         })
-        setComissaoMes(mesAtual.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
+        setPropostasMes(doMes.length)
+        setComissaoMes(doMes.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
+
+        // Comissões do ano
+        const doAno = todas.filter((p) => {
+          const d = new Date(p.data_proposta)
+          return d.getFullYear() === anoAtual
+        })
+        setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
       }
 
+      // Timeline de parcelas
       const { data: parcelas } = await supabase
         .from('parcelas_comissao')
-        .select('*, propostas(numero_proposta, nome_cliente, tipo_proposta_codigo)')
+        .select('mes_referencia, valor, pago')
         .order('mes_referencia', { ascending: true })
 
       if (parcelas && parcelas.length > 0) {
@@ -76,21 +85,24 @@ export default function DashboardPage() {
         for (const p of parcelas) {
           const mes = (p.mes_referencia as string).slice(0, 7)
           if (!mapa[mes]) {
-            mapa[mes] = { mes, label: mesLabel(mes), total: 0, pago: 0, pendente: 0, qtd: 0, parcelas: [] }
+            mapa[mes] = { mes, label: mesLabel(mes), total: 0, recebido: 0, qtd: 0 }
           }
           const valor = parseFloat(p.valor)
-          mapa[mes].total += valor
           mapa[mes].qtd += 1
-          if (p.pago) mapa[mes].pago += valor
-          else mapa[mes].pendente += valor
-          mapa[mes].parcelas.push(p)
+
+          // Total = comissão gerada no mês
+          mapa[mes].total += valor
+
+          // Recebido = parcelas pagas daquele mês (seguindo lógica: recebe no mês seguinte)
+          if (p.pago) {
+            mapa[mes].recebido += valor
+          }
         }
 
         const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
         setTimeline(lista)
 
-        const now = new Date()
-        const mesAtualStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
         setMesSelecionado(lista.find((m) => m.mes === mesAtualStr)?.mes || lista[0]?.mes || null)
       }
     } catch (err) {
@@ -98,11 +110,6 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const togglePago = async (parcelaId: string, pagoAtual: boolean) => {
-    const { error } = await supabase.from('parcelas_comissao').update({ pago: !pagoAtual }).eq('id', parcelaId)
-    if (!error) loadDashboard()
   }
 
   const idxAtual = timeline.findIndex((m) => m.mes === mesSelecionado)
@@ -121,9 +128,9 @@ export default function DashboardPage() {
   }
 
   const cards = [
-    { title: 'Total de Propostas', value: totalPropostas, icon: FileText, color: 'bg-blue-500' },
+    { title: 'Propostas do Mês', value: propostasMes, icon: FileText, color: 'bg-blue-500' },
     { title: 'Comissões do Mês', value: `R$ ${fmt(comissaoMes)}`, icon: Calendar, color: 'bg-amber-500' },
-    { title: 'Comissão Total', value: `R$ ${fmt(comissaoTotal)}`, icon: DollarSign, color: 'bg-emerald-500' },
+    { title: 'Comissão do Ano', value: `R$ ${fmt(comissaoAno)}`, icon: TrendingUp, color: 'bg-emerald-500' },
   ]
 
   return (
@@ -158,7 +165,7 @@ export default function DashboardPage() {
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
               <h2 className="text-base sm:text-lg font-semibold text-slate-900">📅 Comissões por Mês</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Parcelas de consórcio e outros produtos parcelados
+                Resumo mensal de comissões geradas e recebidas
               </p>
             </div>
 
@@ -185,9 +192,6 @@ export default function DashboardPage() {
                     `}
                   >
                     {m.label}
-                    {m.pendente > 0 && !isAtual && (
-                      <span className="ml-1.5 inline-block w-2 h-2 bg-amber-400 rounded-full" />
-                    )}
                   </button>
                 )
               })}
@@ -200,171 +204,102 @@ export default function DashboardPage() {
                   <button
                     onClick={() => mesAnterior && setMesSelecionado(mesAnterior)}
                     disabled={!mesAnterior}
-                    className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeft className="w-5 h-5 text-slate-600" />
                   </button>
 
-                  <div className="text-center">
-                    <div className="text-lg sm:text-xl font-bold text-slate-900">{dadosMes.label}</div>
-                    <div className="text-xs sm:text-sm text-slate-500">
-                      {dadosMes.qtd} parcela{dadosMes.qtd !== 1 ? 's' : ''}
-                    </div>
-                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900">{dadosMes.label}</h3>
 
                   <button
                     onClick={() => mesProximo && setMesSelecionado(mesProximo)}
                     disabled={!mesProximo}
-                    className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-5 h-5 text-slate-600" />
                   </button>
                 </div>
 
-                {/* Mini cards */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
-                  <div className="bg-slate-50 rounded-lg p-3 sm:p-4 text-center">
-                    <div className="text-xs sm:text-sm text-slate-500 mb-1">Total</div>
-                    <div className="text-sm sm:text-lg font-bold text-slate-900">R$ {fmt(dadosMes.total)}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="text-xs sm:text-sm text-blue-600 font-medium mb-1">Total Gerado</div>
+                    <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
+                    <div className="text-xs text-blue-600 mt-1">{dadosMes.qtd} parcela(s)</div>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3 sm:p-4 text-center">
-                    <div className="text-xs sm:text-sm text-green-600 mb-1">Recebido</div>
-                    <div className="text-sm sm:text-lg font-bold text-green-700">R$ {fmt(dadosMes.pago)}</div>
-                  </div>
-                  <div className="bg-amber-50 rounded-lg p-3 sm:p-4 text-center">
-                    <div className="text-xs sm:text-sm text-amber-600 mb-1">Pendente</div>
-                    <div className="text-sm sm:text-lg font-bold text-amber-700">R$ {fmt(dadosMes.pendente)}</div>
-                  </div>
-                </div>
 
-                {/* Lista de parcelas */}
-                <div className="space-y-2">
-                  {dadosMes.parcelas.map((p: any) => (
-                    <div
-                      key={p.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                        p.pago ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                        <button
-                          onClick={() => togglePago(p.id, p.pago)}
-                          className={`flex-shrink-0 p-1 rounded-full transition-colors ${
-                            p.pago ? 'text-green-600 hover:text-green-700' : 'text-slate-300 hover:text-slate-500'
-                          }`}
-                          title={p.pago ? 'Marcar como pendente' : 'Marcar como recebido'}
-                        >
-                          {p.pago ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium text-slate-900 text-xs sm:text-sm truncate">
-                            {p.propostas?.nome_cliente || 'Cliente'}
-                          </div>
-                          <div className="text-xs text-slate-500 truncate">
-                            {p.propostas?.numero_proposta} · {p.propostas?.tipo_proposta_codigo} · Parcela{' '}
-                            {p.numero_parcela}
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                        className={`flex-shrink-0 font-semibold text-sm sm:text-base ${
-                          p.pago ? 'text-green-600' : 'text-slate-900'
-                        }`}
-                      >
-                        R$ {fmt(parseFloat(p.valor))}
-                      </div>
-                    </div>
-                  ))}
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <div className="text-xs sm:text-sm text-green-600 font-medium mb-1">Recebido</div>
+                    <div className="text-xl sm:text-2xl font-bold text-green-900">R$ {fmt(dadosMes.recebido)}</div>
+                  </div>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Últimas propostas - Desktop */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hidden sm:block">
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">Últimas Propostas</h2>
-            <Link href="/propostas" className="text-blue-600 hover:underline text-xs sm:text-sm font-medium">
-              Ver todas →
-            </Link>
+        {/* Últimas Propostas */}
+        <div className="bg-white rounded-xl border border-slate-200">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">📋 Últimas Propostas</h2>
           </div>
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-4 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-700">Número</th>
-                <th className="text-left px-4 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-700">Cliente</th>
-                <th className="text-left px-4 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-700">Tipo</th>
-                <th className="text-left px-4 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-700">Valor</th>
-                <th className="text-left px-4 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-slate-700">
-                  Comissão
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {ultimasPropostas.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 sm:px-6 py-3 font-medium text-slate-900 text-xs sm:text-sm">
-                    {p.numero_proposta}
-                  </td>
-                  <td className="px-4 sm:px-6 py-3 text-slate-700 text-xs sm:text-sm">{p.nome_cliente}</td>
-                  <td className="px-4 sm:px-6 py-3 text-slate-700 text-xs sm:text-sm">{p.tipo_proposta_codigo}</td>
-                  <td className="px-4 sm:px-6 py-3 text-slate-700 text-xs sm:text-sm">
-                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 sm:px-6 py-3 font-semibold text-green-600 text-xs sm:text-sm">
-                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </td>
+
+          {/* Desktop - Tabela */}
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Número</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Cliente</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Tipo</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Valor</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Data</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {ultimasPropostas.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">Nenhuma proposta cadastrada ainda</p>
-            </div>
-          )}
-        </div>
-
-        {/* Últimas propostas - Mobile (cards) */}
-        <div className="sm:hidden bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-            <h2 className="text-base font-semibold text-slate-900">Últimas Propostas</h2>
-            <Link href="/propostas" className="text-blue-600 hover:underline text-xs font-medium">
-              Ver todas →
-            </Link>
+              </thead>
+              <tbody>
+                {ultimasPropostas.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-6 py-3 text-sm font-medium text-slate-900">{p.numero_proposta}</td>
+                    <td className="px-6 py-3 text-sm text-slate-700">{p.nome_cliente}</td>
+                    <td className="px-6 py-3 text-sm text-slate-700">{p.tipo_proposta_codigo}</td>
+                    <td className="px-6 py-3 text-sm text-slate-700">
+                      R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-6 py-3 text-sm text-slate-700">
+                      {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="p-4 space-y-3">
+
+          {/* Mobile - Cards */}
+          <div className="lg:hidden p-4 space-y-3">
             {ultimasPropostas.map((p) => (
-              <div key={p.id} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <div key={p.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
                 <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</p>
-                    <p className="text-xs text-slate-600">{p.nome_cliente}</p>
-                  </div>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    {p.tipo_proposta_codigo}
+                  <span className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</span>
+                  <span className="text-xs text-slate-500">
+                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </span>
                 </div>
+                <p className="text-sm text-slate-700 mb-1">{p.nome_cliente}</p>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600">
+                  <span className="text-slate-600">{p.tipo_proposta_codigo}</span>
+                  <span className="font-semibold text-slate-900">
                     R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="font-semibold text-green-600">
-                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
             ))}
-            {ultimasPropostas.length === 0 && (
-              <div className="text-center py-8 text-slate-500">
-                <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Nenhuma proposta cadastrada</p>
-              </div>
-            )}
           </div>
+
+          {ultimasPropostas.length === 0 && (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
+              <p>Nenhuma proposta cadastrada</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
