@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { Plus, Search, FileText } from 'lucide-react'
+import { Plus, Search, FileText, Pencil, Trash2 } from 'lucide-react'
 
 interface Proposta {
   id: string
@@ -32,12 +32,24 @@ export default function PropostasPage() {
       .select('id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total')
       .order('data_proposta', { ascending: false })
 
-    if (error) {
-      console.error('Erro ao carregar propostas:', error)
-    }
-
+    if (error) console.error('Erro ao carregar propostas:', error)
     if (data) setPropostas(data)
     setLoading(false)
+  }
+
+  const handleDelete = async (id: string, numero: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a proposta ${numero}?\nAs parcelas vinculadas também serão removidas.`)) return
+
+    // Exclui parcelas primeiro
+    await supabase.from('parcelas_comissao').delete().eq('proposta_id', id)
+    // Exclui proposta
+    const { error } = await supabase.from('propostas').delete().eq('id', id)
+
+    if (error) {
+      alert('Erro ao excluir: ' + error.message)
+    } else {
+      setPropostas(prev => prev.filter(p => p.id !== id))
+    }
   }
 
   const filteredPropostas = propostas.filter(p =>
@@ -93,6 +105,7 @@ export default function PropostasPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Data</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Valor</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Comissão</th>
+                <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -115,6 +128,24 @@ export default function PropostasPage() {
                   </td>
                   <td className="px-6 py-4 font-semibold text-green-600">
                     R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <Link
+                        href={`/propostas/${p.id}/editar`}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(p.id, p.numero_proposta)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
