@@ -1,13 +1,31 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-// GET /api/clientes/:id — detalhe + histórico de propostas
+function getSupabase() {
+  const cookieStore = cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+}
+
+// GET /api/clientes/:id
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = getSupabase()
 
   const { data: cliente, error } = await supabase
     .from('clientes')
@@ -36,12 +54,12 @@ export async function GET(
   return NextResponse.json(cliente)
 }
 
-// PUT /api/clientes/:id — editar cliente
+// PUT /api/clientes/:id
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = getSupabase()
   const body = await req.json()
 
   const { nome, cpf, telefone, agencia, conta } = body
@@ -50,7 +68,6 @@ export async function PUT(
     return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 })
   }
 
-  // Verifica duplicidade de CPF (ignora o próprio registro)
   if (cpf) {
     const { data: existing } = await supabase
       .from('clientes')
@@ -80,9 +97,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = getSupabase()
 
-  // Bloqueia delete se tiver propostas vinculadas
   const { count } = await supabase
     .from('propostas')
     .select('id', { count: 'exact', head: true })

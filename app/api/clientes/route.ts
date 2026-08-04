@@ -1,11 +1,28 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-// GET /api/clientes?q=João   — busca por nome ou CPF
-// GET /api/clientes           — lista todos
+function getSupabase() {
+  const cookieStore = cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+}
+
+// GET /api/clientes?q=João
 export async function GET(req: NextRequest) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = getSupabase()
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q')?.trim()
 
@@ -33,9 +50,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data)
 }
 
-// POST /api/clientes — criar cliente
+// POST /api/clientes
 export async function POST(req: NextRequest) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = getSupabase()
   const body = await req.json()
 
   const { nome, cpf, telefone, agencia, conta } = body
@@ -44,7 +61,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 })
   }
 
-  // Verifica duplicidade de CPF
   if (cpf) {
     const { data: existing } = await supabase
       .from('clientes')
