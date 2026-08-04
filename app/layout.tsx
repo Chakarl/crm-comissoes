@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase'
 import Navbar from './components/Navbar'
 import './globals.css'
 
@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 

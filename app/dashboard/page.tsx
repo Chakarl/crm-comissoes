@@ -114,68 +114,17 @@ export default function DashboardPage() {
                       <Icon className="w-6 h-6 text-white" />
                     </div>
                   </div>
-                  <h3 className="text-sm font-medium text-slate-600 mb-1">
-                    {card.title}
-                  </h3>
-                  <p className="text-2xl font-bold text-slate-900">
+
+                  <div className="text-3xl font-bold text-slate-900 mb-1">
                     {card.value}
-                  </p>
+                  </div>
+                  <div className="text-slate-600 text-sm font-medium">
+                    {card.title}
+                  </div>
                 </div>
               </Link>
             )
           })}
-        </div>
-
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl p-6 border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              Ações Rápidas
-            </h2>
-            <div className="space-y-3">
-              <Link
-                href="/propostas"
-                className="block p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-              >
-                <div className="font-medium text-blue-900">Nova Proposta</div>
-                <div className="text-sm text-blue-700">Cadastrar nova proposta comercial</div>
-              </Link>
-              <Link
-                href="/clientes"
-                className="block p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
-              >
-                <div className="font-medium text-green-900">Novo Cliente</div>
-                <div className="text-sm text-green-700">Adicionar cliente ao sistema</div>
-              </Link>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-amber-600" />
-              Próximos Vencimentos
-            </h2>
-            <div className="text-sm text-slate-600">
-              {stats.alertasRenovacao > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-amber-600">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="font-medium">
-                      {stats.alertasRenovacao} {stats.alertasRenovacao === 1 ? 'proposta' : 'propostas'} próximas do vencimento
-                    </span>
-                  </div>
-                  <Link
-                    href="/renovacoes"
-                    className="inline-block mt-2 text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Ver alertas →
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-slate-500">Nenhum alerta no momento</p>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </div>
