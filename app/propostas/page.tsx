@@ -10,13 +10,10 @@ interface Proposta {
   numero_proposta: string
   tipo_proposta_codigo: string
   data_proposta: string
-  valor_proposta: number
-  prazo_meses: number
-  status: string
+  nome_cliente: string
+  valor_contratado: number
+  prazo: number | null
   comissao_total: number
-  clientes: {
-    nome: string
-  }
 }
 
 export default function PropostasPage() {
@@ -32,28 +29,20 @@ export default function PropostasPage() {
   const loadPropostas = async () => {
     const { data, error } = await supabase
       .from('propostas')
-      .select(`
-        id,
-        numero_proposta,
-        tipo_proposta_codigo,
-        data_proposta,
-        valor_proposta,
-        prazo_meses,
-        status,
-        comissao_total,
-        clientes(nome)
-      `)
+      .select('id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total')
       .order('data_proposta', { ascending: false })
 
-    if (!error && data) {
-      setPropostas(data as any)
+    if (error) {
+      console.error('Erro ao carregar propostas:', error)
     }
+
+    if (data) setPropostas(data)
     setLoading(false)
   }
 
   const filteredPropostas = propostas.filter(p =>
-    p.numero_proposta.toLowerCase().includes(search.toLowerCase()) ||
-    p.clientes.nome.toLowerCase().includes(search.toLowerCase())
+    p.numero_proposta?.toLowerCase().includes(search.toLowerCase()) ||
+    p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
   )
 
   if (loading) {
@@ -101,38 +90,31 @@ export default function PropostasPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Número</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Cliente</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Tipo</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Data</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Valor</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Comissão</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Status</th>
               </tr>
             </thead>
             <tbody>
-              {filteredPropostas.map((proposta) => (
-                <tr key={proposta.id} className="border-b border-slate-100 hover:bg-slate-50">
+              {filteredPropostas.map((p) => (
+                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4 font-medium text-slate-900">
-                    {proposta.numero_proposta}
+                    {p.numero_proposta}
                   </td>
                   <td className="px-6 py-4 text-slate-700">
-                    {proposta.clientes.nome}
+                    {p.nome_cliente}
                   </td>
                   <td className="px-6 py-4 text-slate-700">
-                    {proposta.tipo_proposta_codigo}
+                    {p.tipo_proposta_codigo}
                   </td>
                   <td className="px-6 py-4 text-slate-700">
-                    R$ {proposta.valor_proposta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 font-semibold text-green-600">
-                    R$ {proposta.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`
-                      px-3 py-1 rounded-full text-xs font-medium
-                      ${proposta.status === 'Aprovada' ? 'bg-green-100 text-green-700' : ''}
-                      ${proposta.status === 'Pendente' ? 'bg-yellow-100 text-yellow-700' : ''}
-                      ${proposta.status === 'Rejeitada' ? 'bg-red-100 text-red-700' : ''}
-                    `}>
-                      {proposta.status}
-                    </span>
+                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
                   </td>
                 </tr>
               ))}
