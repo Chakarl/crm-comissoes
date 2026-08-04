@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
+
+const supabase = createClient();
 
 export function Dashboard() {
   const [stats, setStats] = useState({
@@ -37,7 +39,7 @@ export function Dashboard() {
   }, []);
 
   const cards = [
-    { label: "Total de Propostas", value: stats.totalPropostas.toString(), color: "text-primary" },
+    { label: "Total de Propostas", value: stats.totalPropostas.toString(), color: "text-blue-600" },
     {
       label: "Comissão Total (acumulada)",
       value: stats.totalComissao.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),

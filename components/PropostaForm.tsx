@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { calcularComissao } from "@/lib/calcularComissao";
 import { gerarParcelasConsorcio, gerarParcelaUnica } from "@/lib/gerarParcelas";
 import { useRouter } from "next/navigation";
+
+const supabase = createClient();
 
 interface TipoProposta {
   id: number;
@@ -67,7 +69,6 @@ export function PropostaForm() {
       const taxa = precisaTaxa ? parseFloat(form.taxa_juros) : null;
       const prazo = precisaPrazo ? parseInt(form.prazo) : null;
 
-      // Calcular comissão
       const calc = await calcularComissao({
         tipo_proposta_codigo: form.tipo_proposta_codigo,
         valor_contratado: valor,
@@ -75,7 +76,6 @@ export function PropostaForm() {
         prazo: prazo,
       });
 
-      // Inserir proposta
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
@@ -95,7 +95,6 @@ export function PropostaForm() {
 
       if (errProp) throw errProp;
 
-      // Gerar parcelas
       let parcelas;
       if (calc.is_consorcio) {
         parcelas = gerarParcelasConsorcio({
@@ -124,12 +123,11 @@ export function PropostaForm() {
 
       setResultado(
         `✅ Proposta salva! Comissão: ${pctStr} → R$ ${calc.comissao_total.toFixed(2)}` +
-        (calc.is_consorcio
-          ? ` (dividida em ${parcelas.length} parcelas de R$ ${parcelas[0].valor.toFixed(2)})`
-          : "")
+          (calc.is_consorcio
+            ? ` (dividida em ${parcelas.length} parcelas de R$ ${parcelas[0].valor.toFixed(2)})`
+            : "")
       );
 
-      // Limpar form
       setForm({
         numero_proposta: "",
         data_proposta: new Date().toISOString().split("T")[0],
@@ -146,7 +144,6 @@ export function PropostaForm() {
     }
   }
 
-  // Agrupar tipos por categoria
   const categorias = tipos.reduce<Record<string, TipoProposta[]>>((acc, t) => {
     if (!acc[t.categoria]) acc[t.categoria] = [];
     acc[t.categoria].push(t);
@@ -252,29 +249,30 @@ export function PropostaForm() {
             value={form.prazo}
             onChange={(e) => setForm({ ...form, prazo: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="Ex: 72"
+            placeholder="Ex: 60"
           />
+        </div>
+      )}
+
+      {erro && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+          ❌ {erro}
+        </div>
+      )}
+
+      {resultado && (
+        <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm">
+          {resultado}
         </div>
       )}
 
       <button
         type="submit"
         disabled={loading}
-        className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg disabled:opacity-50 transition-colors"
       >
-        {loading ? "Calculando..." : "Salvar Proposta"}
+        {loading ? "Salvando..." : "💾 Salvar Proposta"}
       </button>
-
-      {resultado && (
-        <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-lg text-sm">
-          {resultado}
-        </div>
-      )}
-      {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg text-sm">
-          ❌ {erro}
-        </div>
-      )}
     </form>
   );
 }

@@ -1,4 +1,6 @@
-import { supabase } from "./supabase";
+import { createClient } from "./supabase";
+
+const supabase = createClient();
 
 interface CalcInput {
   tipo_proposta_codigo: string;
@@ -19,7 +21,6 @@ export async function calcularComissao(input: CalcInput): Promise<CalcResult> {
 
   const isConsorcio = tipo_proposta_codigo.startsWith("CONSORCIO_");
 
-  // Buscar faixas do tipo
   let query = supabase
     .from("tabela_comissao")
     .select("*")
