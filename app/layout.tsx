@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Navbar from './components/Navbar'
+import Navbar from '@/components/Navbar' // ← mudou aqui (caminho absoluto)
 import './globals.css'
 
 export default function RootLayout({
