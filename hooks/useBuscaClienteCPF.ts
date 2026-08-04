@@ -21,8 +21,12 @@ export function useBuscaClienteCPF(cpf: string) {
   const [jaExiste, setJaExiste] = useState(false)
   const supabase = createClient()
 
-  // Limpa tudo que não é número
   const cpfLimpo = cpf.replace(/\D/g, '')
+
+  // Monta as duas versões para garantir que encontra
+  const cpfComMascara = cpfLimpo.length === 11
+    ? cpfLimpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+    : ''
 
   useEffect(() => {
     // Só busca quando CPF tiver 11 dígitos
@@ -35,10 +39,12 @@ export function useBuscaClienteCPF(cpf: string) {
     const timeout = setTimeout(async () => {
       setBuscando(true)
       try {
+        // Busca com máscara OU sem máscara (cobre os dois cenários)
         const { data, error } = await supabase
           .from('clientes')
           .select('*')
-          .eq('cpf', cpfLimpo)
+          .or(`cpf.eq.${cpfLimpo},cpf.eq.${cpfComMascara}`)
+          .limit(1)
           .maybeSingle()
 
         if (data && !error) {
@@ -49,13 +55,13 @@ export function useBuscaClienteCPF(cpf: string) {
           setJaExiste(false)
         }
       } catch (err) {
-        console.error('Erro ao buscar cliente:', err)
+        console.error('Erro ao buscar cliente por CPF:', err)
         setCliente(null)
         setJaExiste(false)
       } finally {
         setBuscando(false)
       }
-    }, 400) // debounce de 400ms
+    }, 400)
 
     return () => clearTimeout(timeout)
   }, [cpfLimpo])
