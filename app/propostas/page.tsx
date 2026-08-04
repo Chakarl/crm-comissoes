@@ -1,455 +1,217 @@
-// app/propostas/nova/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-import { useBuscaClienteCPF } from '@/hooks/useBuscaClienteCPF'
-import {
-  User,
-  FileText,
-  CheckCircle,
-  Loader2,
-  Search,
-} from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, FileText, Pencil, Trash2 } from 'lucide-react'
 
-export default function NovaPropostaPage() {
-  const router = useRouter()
+interface Proposta {
+  id: string
+  numero_proposta: string
+  tipo_proposta_codigo: string
+  data_proposta: string
+  nome_cliente: string
+  valor_contratado: number
+  prazo: number | null
+  comissao_total: number
+}
+
+export default function PropostasPage() {
+  const [propostas, setPropostas] = useState<Proposta[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const supabase = createClient()
-  const [salvando, setSalvando] = useState(false)
 
-  // Campos do cliente
-  const [cpf, setCpf] = useState('')
-  const [nome, setNome] = useState('')
-  const [telefone, setTelefone] = useState('')
-  const [email, setEmail] = useState('')
-  const [dataNascimento, setDataNascimento] = useState('')
-  const [endereco, setEndereco] = useState('')
-  const [cidade, setCidade] = useState('')
-  const [estado, setEstado] = useState('')
-  const [cep, setCep] = useState('')
-  const [clienteId, setClienteId] = useState<string | null>(null)
-
-  // Campos da proposta
-  const [tipoProposta, setTipoProposta] = useState('')
-  const [valorContratado, setValorContratado] = useState('')
-  const [comissaoTotal, setComissaoTotal] = useState('')
-  const [dataProposta, setDataProposta] = useState(
-    new Date().toISOString().slice(0, 10)
-  )
-  const [numeroProposta, setNumeroProposta] = useState('')
-  const [observacoes, setObservacoes] = useState('')
-
-  // Hook de busca automática
-  const { cliente, buscando, jaExiste } = useBuscaClienteCPF(cpf)
-
-  // Quando encontrar cliente, preenche os campos automaticamente
   useEffect(() => {
-    if (cliente) {
-      setClienteId(cliente.id)
-      setNome(cliente.nome || '')
-      setTelefone(cliente.telefone || '')
-      setEmail(cliente.email || '')
-      setDataNascimento(cliente.data_nascimento || '')
-      setEndereco(cliente.endereco || '')
-      setCidade(cliente.cidade || '')
-      setEstado(cliente.estado || '')
-      setCep(cliente.cep || '')
+    loadPropostas()
+  }, [])
+
+  const loadPropostas = async () => {
+    const { data, error } = await supabase
+      .from('propostas')
+      .select('id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total')
+      .order('data_proposta', { ascending: false })
+
+    if (error) console.error('Erro ao carregar propostas:', error)
+    if (data) setPropostas(data)
+    setLoading(false)
+  }
+
+  const handleDelete = async (id: string, numero: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a proposta ${numero}?\nAs parcelas vinculadas também serão removidas.`)) return
+
+    await supabase.from('parcelas_comissao').delete().eq('proposta_id', id)
+    const { error } = await supabase.from('propostas').delete().eq('id', id)
+
+    if (error) {
+      alert('Erro ao excluir: ' + error.message)
     } else {
-      setClienteId(null)
+      setPropostas((prev) => prev.filter((p) => p.id !== id))
     }
-  }, [cliente])
-
-  // Máscara de CPF
-  const handleCpfChange = (value: string) => {
-    const nums = value.replace(/\D/g, '').slice(0, 11)
-    const masked = nums
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-    setCpf(masked)
   }
 
-  // Limpar campos do cliente ao mudar CPF (se não encontrou)
-  const limparCliente = () => {
-    setClienteId(null)
-    setNome('')
-    setTelefone('')
-    setEmail('')
-    setDataNascimento('')
-    setEndereco('')
-    setCidade('')
-    setEstado('')
-    setCep('')
-  }
+  const filteredPropostas = propostas.filter(
+    (p) =>
+      p.numero_proposta?.toLowerCase().includes(search.toLowerCase()) ||
+      p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
+  )
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSalvando(true)
-
-    try {
-      const cpfLimpo = cpf.replace(/\D/g, '')
-      let idCliente = clienteId
-
-      // Se cliente novo, cadastra primeiro
-      if (!idCliente) {
-        const { data: novoCliente, error: errCliente } = await supabase
-          .from('clientes')
-          .insert({
-            cpf: cpfLimpo,
-            nome,
-            telefone,
-            email,
-            data_nascimento: dataNascimento || null,
-            endereco,
-            cidade,
-            estado,
-            cep,
-          })
-          .select('id')
-          .single()
-
-        if (errCliente) throw errCliente
-        idCliente = novoCliente.id
-      }
-
-      // Cadastra a proposta
-      const { error: errProposta } = await supabase.from('propostas').insert({
-        cliente_id: idCliente,
-        nome_cliente: nome,
-        cpf_cliente: cpfLimpo,
-        tipo_proposta_codigo: tipoProposta,
-        valor_contratado: parseFloat(valorContratado) || 0,
-        comissao_total: parseFloat(comissaoTotal) || 0,
-        data_proposta: dataProposta,
-        numero_proposta: numeroProposta,
-        observacoes,
-      })
-
-      if (errProposta) throw errProposta
-
-      // Se for consórcio, gera 5 parcelas
-      const tipo = tipoProposta.toLowerCase()
-      if (tipo.includes('consorcio') || tipo.includes('consórcio')) {
-        const valorTotal = parseFloat(comissaoTotal) || 0
-        const parcelaMensal = valorTotal / 5
-        const parcelas = []
-
-        for (let i = 1; i <= 5; i++) {
-          const d = new Date(dataProposta)
-          d.setMonth(d.getMonth() + i)
-          const mesRef = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-
-          parcelas.push({
-            proposta_id: idCliente, // ajuste se precisar do id da proposta
-            mes_referencia: mesRef,
-            parcela_numero: i,
-            valor: parcelaMensal,
-            status: 'pendente',
-          })
-        }
-
-        if (parcelas.length > 0) {
-          await supabase.from('parcelas_comissao').insert(parcelas)
-        }
-      }
-
-      router.push('/propostas')
-    } catch (err) {
-      console.error('Erro ao salvar:', err)
-      alert('Erro ao salvar proposta. Verifique os dados.')
-    } finally {
-      setSalvando(false)
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-600">Carregando propostas...</div>
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Nova Proposta</h1>
-          <p className="text-sm text-slate-600 mt-1">
-            Digite o CPF para buscar cliente existente
-          </p>
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Propostas</h1>
+            <p className="text-sm sm:text-base text-slate-600">Gerencie todas as propostas</p>
+          </div>
+          <Link
+            href="/propostas/nova"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base w-full sm:w-auto justify-center"
+          >
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            Nova Proposta
+          </Link>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* ─── SEÇÃO CLIENTE ─── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <User className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-slate-900">Dados do Cliente</h2>
-            </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por número ou cliente..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+            />
+          </div>
+        </div>
 
-            {/* CPF com indicador de busca */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">CPF *</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={cpf}
-                  onChange={(e) => handleCpfChange(e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  required
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {buscando && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
-                  {!buscando && jaExiste && <CheckCircle className="w-4 h-4 text-emerald-500" />}
-                  {!buscando && !jaExiste && cpf.replace(/\D/g, '').length === 11 && (
-                    <Search className="w-4 h-4 text-slate-400" />
-                  )}
+        {/* Desktop */}
+        <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Número</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Cliente</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Tipo</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Data</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Valor</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Comissão</th>
+                <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPropostas.map((p) => (
+                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="px-6 py-4 font-medium text-slate-900">{p.numero_proposta}</td>
+                  <td className="px-6 py-4 text-slate-700">{p.nome_cliente}</td>
+                  <td className="px-6 py-4 text-slate-700">{p.tipo_proposta_codigo}</td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-green-600">
+                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <Link
+                        href={`/propostas/${p.id}/editar`}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(p.id, p.numero_proposta)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {filteredPropostas.length === 0 && (
+            <div className="text-center py-12 text-slate-500">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Nenhuma proposta encontrada</p>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile */}
+        <div className="lg:hidden space-y-4">
+          {filteredPropostas.map((p) => (
+            <div key={p.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</p>
+                  <p className="text-slate-600 text-sm">{p.nome_cliente}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Link
+                    href={`/propostas/${p.id}/editar`}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(p.id, p.numero_proposta)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-
-              {/* Badge cliente encontrado / novo */}
-              {cpf.replace(/\D/g, '').length === 11 && !buscando && (
-                <div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                  jaExiste
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                }`}>
-                  {jaExiste ? (
-                    <>
-                      <CheckCircle className="w-3 h-3" />
-                      Cliente encontrado — campos preenchidos automaticamente
-                    </>
-                  ) : (
-                    <>
-                      <User className="w-3 h-3" />
-                      Novo cliente — preencha os dados abaixo
-                    </>
-                  )}
+              <div className="space-y-1.5 text-xs sm:text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Tipo:</span>
+                  <span className="text-slate-700 font-medium">{p.tipo_proposta_codigo}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Grid de campos do cliente */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nome completo *</label>
-                <input
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-                <input
-                  type="text"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Data de nascimento</label>
-                <input
-                  type="date"
-                  value={dataNascimento}
-                  onChange={(e) => setDataNascimento(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">CEP</label>
-                <input
-                  type="text"
-                  value={cep}
-                  onChange={(e) => setCep(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Endereço</label>
-                <input
-                  type="text"
-                  value={endereco}
-                  onChange={(e) => setEndereco(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Cidade</label>
-                <input
-                  type="text"
-                  value={cidade}
-                  onChange={(e) => setCidade(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Estado</label>
-                <input
-                  type="text"
-                  value={estado}
-                  onChange={(e) => setEstado(e.target.value)}
-                  disabled={jaExiste}
-                  className={`w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
-                    jaExiste ? 'bg-slate-50 text-slate-600' : ''
-                  }`}
-                />
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Data:</span>
+                  <span className="text-slate-700">
+                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Valor:</span>
+                  <span className="text-slate-900 font-semibold">
+                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Comissão:</span>
+                  <span className="text-green-600 font-semibold">
+                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          ))}
 
-          {/* ─── SEÇÃO PROPOSTA ─── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-amber-600" />
-              <h2 className="text-lg font-semibold text-slate-900">Dados da Proposta</h2>
+          {filteredPropostas.length === 0 && (
+            <div className="text-center py-12 text-slate-500">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Nenhuma proposta encontrada</p>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Proposta *</label>
-                <select
-                  value={tipoProposta}
-                  onChange={(e) => setTipoProposta(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Selecione...</option>
-                  <option value="consorcio">Consórcio</option>
-                  <option value="seguro_auto">Seguro Auto</option>
-                  <option value="seguro_vida">Seguro Vida</option>
-                  <option value="seguro_residencial">Seguro Residencial</option>
-                  <option value="previdencia">Previdência</option>
-                  <option value="capitalizacao">Capitalização</option>
-                  <option value="financiamento">Financiamento</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nº da Proposta</label>
-                <input
-                  type="text"
-                  value={numeroProposta}
-                  onChange={(e) => setNumeroProposta(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Valor Contratado *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={valorContratado}
-                  onChange={(e) => setValorContratado(e.target.value)}
-                  placeholder="0,00"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Comissão Total *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={comissaoTotal}
-                  onChange={(e) => setComissaoTotal(e.target.value)}
-                  placeholder="0,00"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-                {(tipoProposta.includes('consorcio') || tipoProposta.includes('consórcio')) && comissaoTotal && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    💡 Consórcio: 5 parcelas de R$ {(parseFloat(comissaoTotal) / 5).toFixed(2)}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Data da Proposta *</label>
-                <input
-                  type="date"
-                  value={dataProposta}
-                  onChange={(e) => setDataProposta(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Observações</label>
-                <textarea
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ─── BOTÕES ─── */}
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={salvando}
-              className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-            >
-              {salvando ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                'Salvar Proposta'
-              )}
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   )
