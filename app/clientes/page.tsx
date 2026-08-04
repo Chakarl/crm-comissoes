@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Plus, Search, Users as UsersIcon, Pencil, Trash2, X, Loader2 } from 'lucide-react'
+import { Paginacao } from '@/components/Paginacao'
+
+const POR_PAGINA = 10
 
 interface Cliente {
   id: string
@@ -19,6 +22,7 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [pagina, setPagina] = useState(1)
   const [showModal, setShowModal] = useState(false)
   const [editando, setEditando] = useState<Cliente | null>(null)
   const [deletando, setDeletando] = useState<string | null>(null)
@@ -26,9 +30,9 @@ export default function ClientesPage() {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadClientes()
-  }, [])
+  useEffect(() => { loadClientes() }, [])
+
+  useEffect(() => { setPagina(1) }, [search])
 
   const loadClientes = async () => {
     const { data } = await supabase.from('clientes').select('*').order('nome', { ascending: true })
@@ -66,16 +70,10 @@ export default function ClientesPage() {
 
     if (editando) {
       const { error } = await supabase.from('clientes').update(formData).eq('id', editando.id)
-      if (!error) {
-        fecharModal()
-        loadClientes()
-      }
+      if (!error) { fecharModal(); loadClientes() }
     } else {
       const { error } = await supabase.from('clientes').insert([formData])
-      if (!error) {
-        fecharModal()
-        loadClientes()
-      }
+      if (!error) { fecharModal(); loadClientes() }
     }
     setSaving(false)
   }
@@ -83,16 +81,17 @@ export default function ClientesPage() {
   const handleDelete = async (id: string) => {
     setDeletando(id)
     const { error } = await supabase.from('clientes').delete().eq('id', id)
-
-    if (!error) {
-      setClientes((prev) => prev.filter((c) => c.id !== id))
-    }
+    if (!error) setClientes((prev) => prev.filter((c) => c.id !== id))
     setDeletando(null)
   }
 
-  const filteredClientes = clientes.filter(
+  const filtered = clientes.filter(
     (c) => c.nome.toLowerCase().includes(search.toLowerCase()) || c.cpf?.includes(search)
   )
+
+  const totalPaginas = Math.ceil(filtered.length / POR_PAGINA)
+  const pag = Math.min(pagina, totalPaginas || 1)
+  const fatia = filtered.slice((pag - 1) * POR_PAGINA, pag * POR_PAGINA)
 
   if (loading) {
     return (
@@ -105,10 +104,14 @@ export default function ClientesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Clientes</h1>
-            <p className="text-sm sm:text-base text-slate-600">Gerencie seus clientes</p>
+            <p className="text-sm sm:text-base text-slate-600">
+              {filtered.length} cliente{filtered.length !== 1 && 's'}
+              {search && ` encontrado${filtered.length !== 1 ? 's' : ''}`}
+            </p>
           </div>
           <button
             onClick={abrirNovo}
@@ -119,6 +122,7 @@ export default function ClientesPage() {
           </button>
         </div>
 
+        {/* Busca */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -145,7 +149,7 @@ export default function ClientesPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredClientes.map((cliente) => (
+              {fatia.map((cliente) => (
                 <tr key={cliente.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4 font-medium text-slate-900">{cliente.nome}</td>
                   <td className="px-6 py-4 text-slate-700">{cliente.cpf || '-'}</td>
@@ -183,7 +187,7 @@ export default function ClientesPage() {
             </tbody>
           </table>
 
-          {filteredClientes.length === 0 && (
+          {filtered.length === 0 && (
             <div className="text-center py-12 text-slate-500">
               <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Nenhum cliente encontrado</p>
@@ -193,7 +197,7 @@ export default function ClientesPage() {
 
         {/* Mobile */}
         <div className="lg:hidden space-y-4">
-          {filteredClientes.map((cliente) => (
+          {fatia.map((cliente) => (
             <div key={cliente.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -237,13 +241,22 @@ export default function ClientesPage() {
             </div>
           ))}
 
-          {filteredClientes.length === 0 && (
+          {filtered.length === 0 && (
             <div className="text-center py-12 text-slate-500">
               <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Nenhum cliente encontrado</p>
             </div>
           )}
         </div>
+
+        {/* Paginação */}
+        <Paginacao
+          paginaAtual={pag}
+          totalPaginas={totalPaginas}
+          totalItens={filtered.length}
+          itensPorPagina={POR_PAGINA}
+          onMudar={setPagina}
+        />
       </div>
 
       {/* MODAL */}

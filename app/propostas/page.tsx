@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { Plus, Search, FileText, Pencil, Trash2 } from 'lucide-react'
+import { Paginacao } from '@/components/Paginacao' // ← NOVO
+
+const POR_PAGINA = 10 // ← NOVO
 
 interface Proposta {
   id: string
@@ -20,6 +23,7 @@ export default function PropostasPage() {
   const [propostas, setPropostas] = useState<Proposta[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [pagina, setPagina] = useState(1) // ← NOVO
   const supabase = createClient()
 
   useEffect(() => {
@@ -56,6 +60,17 @@ export default function PropostasPage() {
       p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
   )
 
+  // ── PAGINAÇÃO ──
+  const totalPaginas = Math.ceil(filteredPropostas.length / POR_PAGINA)
+  const paginaSegura = Math.min(pagina, totalPaginas || 1)
+  const inicio = (paginaSegura - 1) * POR_PAGINA
+  const propostasPaginadas = filteredPropostas.slice(inicio, inicio + POR_PAGINA)
+
+  // Reseta pra página 1 ao buscar
+  useEffect(() => {
+    setPagina(1)
+  }, [search])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -70,7 +85,10 @@ export default function PropostasPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Propostas</h1>
-            <p className="text-sm sm:text-base text-slate-600">Gerencie todas as propostas</p>
+            <p className="text-sm sm:text-base text-slate-600">
+              {filteredPropostas.length} proposta{filteredPropostas.length !== 1 && 's'}
+              {search && ` encontrada${filteredPropostas.length !== 1 ? 's' : ''}`}
+            </p>
           </div>
           <Link
             href="/propostas/nova"
@@ -109,7 +127,7 @@ export default function PropostasPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredPropostas.map((p) => (
+              {propostasPaginadas.map((p) => (
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4 font-medium text-slate-900">{p.numero_proposta}</td>
                   <td className="px-6 py-4 text-slate-700">{p.nome_cliente}</td>
@@ -156,7 +174,7 @@ export default function PropostasPage() {
 
         {/* Mobile */}
         <div className="lg:hidden space-y-4">
-          {filteredPropostas.map((p) => (
+          {propostasPaginadas.map((p) => (
             <div key={p.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -180,24 +198,24 @@ export default function PropostasPage() {
               </div>
               <div className="space-y-1.5 text-xs sm:text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Tipo:</span>
-                  <span className="text-slate-700 font-medium">{p.tipo_proposta_codigo}</span>
+                  <span className="text-slate-500">Tipo</span>
+                  <span className="text-slate-700">{p.tipo_proposta_codigo}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Data:</span>
+                  <span className="text-slate-500">Data</span>
                   <span className="text-slate-700">
                     {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Valor:</span>
-                  <span className="text-slate-900 font-semibold">
+                  <span className="text-slate-500">Valor</span>
+                  <span className="text-slate-700">
                     R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Comissão:</span>
-                  <span className="text-green-600 font-semibold">
+                  <span className="text-slate-500">Comissão</span>
+                  <span className="font-semibold text-green-600">
                     R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
                   </span>
                 </div>
@@ -212,6 +230,13 @@ export default function PropostasPage() {
             </div>
           )}
         </div>
+
+        {/* ── PAGINAÇÃO ── */}
+        <Paginacao
+          paginaAtual={paginaSegura}
+          totalPaginas={totalPaginas}
+          onMudar={setPagina}
+        />
       </div>
     </div>
   )
