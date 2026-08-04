@@ -1,28 +1,26 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createMiddlewareClient } from '@/lib/supabase-middleware'
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Rotas públicas (não precisam de autenticação)
-  const rotasPublicas = ['/login']
-  
-  if (rotasPublicas.includes(pathname)) {
+  // Rotas públicas
+  if (pathname === '/login') {
     return NextResponse.next()
   }
 
-  // Verificar se tem token no cookie
-  const token = request.cookies.get('auth_token')?.value
+  const { supabase, response } = createMiddlewareClient(request)
 
-  if (!token) {
-    // Redireciona para login se não tiver token
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  return NextResponse.next()
+  return response
 }
 
-// Aplicar middleware em todas as rotas exceto arquivos estáticos e API
 export const config = {
   matcher: [
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
