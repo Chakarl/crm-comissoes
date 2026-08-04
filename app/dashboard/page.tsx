@@ -54,10 +54,8 @@ export default function DashboardPage() {
         .order('data_proposta', { ascending: false })
 
       if (todas) {
-        // Últimas 5 propostas
         setUltimasPropostas(todas.slice(0, 5))
 
-        // Propostas do mês atual
         const doMes = todas.filter((p) => {
           const d = new Date(p.data_proposta)
           return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
@@ -65,7 +63,6 @@ export default function DashboardPage() {
         setPropostasMes(doMes.length)
         setComissaoMes(doMes.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
-        // Comissões do ano
         const doAno = todas.filter((p) => {
           const d = new Date(p.data_proposta)
           return d.getFullYear() === anoAtual
@@ -73,37 +70,37 @@ export default function DashboardPage() {
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
       }
 
-      // Timeline de parcelas
-      const { data: parcelas } = await supabase
-        .from('parcelas_comissao')
-        .select('mes_referencia, valor, pago')
-        .order('mes_referencia', { ascending: true })
+      // Timeline de parcelas/propostas por mês
+      const { data: propostas } = await supabase
+        .from('propostas')
+        .select('data_proposta, comissao_total')
+        .order('data_proposta', { ascending: true })
 
-      if (parcelas && parcelas.length > 0) {
+      if (propostas && propostas.length > 0) {
         const mapa: Record<string, ParcelaAgrupada> = {}
 
-        for (const p of parcelas) {
-          const mes = (p.mes_referencia as string).slice(0, 7)
+        // Agrupar comissões por mês de fechamento da proposta
+        for (const p of propostas) {
+          const mes = (p.data_proposta as string).slice(0, 7) // "2026-08"
           if (!mapa[mes]) {
             mapa[mes] = { mes, label: mesLabel(mes), total: 0, recebido: 0, qtd: 0 }
           }
-          const valor = parseFloat(p.valor)
-          mapa[mes].qtd += 1
-
-          // Total = comissão gerada no mês
+          const valor = p.comissao_total || 0
           mapa[mes].total += valor
-
-          // Recebido = parcelas pagas daquele mês (seguindo lógica: recebe no mês seguinte)
-          if (p.pago) {
-            mapa[mes].recebido += valor
-          }
+          mapa[mes].qtd += 1
         }
 
         const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
+
+        // Calcular "Recebido" = Total gerado do mês anterior
+        for (let i = 1; i < lista.length; i++) {
+          lista[i].recebido = lista[i - 1].total
+        }
+
         setTimeline(lista)
 
         const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
-        setMesSelecionado(lista.find((m) => m.mes === mesAtualStr)?.mes || lista[0]?.mes || null)
+        setMesSelecionado(lista.find((m) => m.mes === mesAtualStr)?.mes || lista[lista.length - 1]?.mes || null)
       }
     } catch (err) {
       console.error('Erro ao carregar dashboard:', err)
@@ -165,7 +162,7 @@ export default function DashboardPage() {
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
               <h2 className="text-base sm:text-lg font-semibold text-slate-900">📅 Comissões por Mês</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Resumo mensal de comissões geradas e recebidas
+                Total gerado no mês e recebido do mês anterior
               </p>
             </div>
 
@@ -181,7 +178,7 @@ export default function DashboardPage() {
                     key={m.mes}
                     onClick={() => setMesSelecionado(m.mes)}
                     className={`
-                      flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors
+                      flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap
                       ${
                         isAtual
                           ? 'bg-blue-600 text-white'
@@ -200,7 +197,7 @@ export default function DashboardPage() {
             {/* Resumo do mês */}
             {dadosMes && (
               <div className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <button
                     onClick={() => mesAnterior && setMesSelecionado(mesAnterior)}
                     disabled={!mesAnterior}
@@ -220,15 +217,15 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <div className="text-xs sm:text-sm text-blue-600 font-medium mb-1">Total Gerado</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="text-xs sm:text-sm text-blue-700 font-medium mb-1">Total Gerado</div>
                     <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
-                    <div className="text-xs text-blue-600 mt-1">{dadosMes.qtd} parcela(s)</div>
+                    <div className="text-xs text-blue-600 mt-1">{dadosMes.qtd} proposta(s)</div>
                   </div>
 
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <div className="text-xs sm:text-sm text-green-600 font-medium mb-1">Recebido</div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="text-xs sm:text-sm text-green-700 font-medium mb-1">Recebido (mês anterior)</div>
                     <div className="text-xl sm:text-2xl font-bold text-green-900">R$ {fmt(dadosMes.recebido)}</div>
                   </div>
                 </div>
@@ -238,69 +235,77 @@ export default function DashboardPage() {
         )}
 
         {/* Últimas Propostas */}
-        <div className="bg-white rounded-xl border border-slate-200">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">📋 Últimas Propostas</h2>
-          </div>
-
-          {/* Desktop - Tabela */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Número</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Cliente</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Tipo</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Valor</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ultimasPropostas.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-6 py-3 text-sm font-medium text-slate-900">{p.numero_proposta}</td>
-                    <td className="px-6 py-3 text-sm text-slate-700">{p.nome_cliente}</td>
-                    <td className="px-6 py-3 text-sm text-slate-700">{p.tipo_proposta_codigo}</td>
-                    <td className="px-6 py-3 text-sm text-slate-700">
-                      R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-slate-700">
-                      {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile - Cards */}
-          <div className="lg:hidden p-4 space-y-3">
-            {ultimasPropostas.map((p) => (
-              <div key={p.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="flex items-start justify-between mb-2">
-                  <span className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</span>
-                  <span className="text-xs text-slate-500">
-                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-700 mb-1">{p.nome_cliente}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600">{p.tipo_proposta_codigo}</span>
-                  <span className="font-semibold text-slate-900">
-                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {ultimasPropostas.length === 0 && (
-            <div className="text-center py-8 text-slate-500 text-sm">
-              <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              <p>Nenhuma proposta cadastrada</p>
+        {ultimasPropostas.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">📋 Últimas Propostas</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">5 propostas mais recentes</p>
             </div>
-          )}
-        </div>
+
+            {/* Desktop - Tabela */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Número</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Cliente</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Tipo</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-700">Data</th>
+                    <th className="text-right px-6 py-3 text-xs font-semibold text-slate-700">Valor</th>
+                    <th className="text-right px-6 py-3 text-xs font-semibold text-slate-700">Comissão</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ultimasPropostas.map((p) => (
+                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="px-6 py-3 text-sm font-medium text-slate-900">{p.numero_proposta}</td>
+                      <td className="px-6 py-3 text-sm text-slate-700">{p.nome_cliente}</td>
+                      <td className="px-6 py-3 text-sm text-slate-700">{p.tipo_proposta_codigo}</td>
+                      <td className="px-6 py-3 text-sm text-slate-700">
+                        {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-6 py-3 text-sm text-slate-700 text-right">
+                        R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-6 py-3 text-sm font-semibold text-green-600 text-right">
+                        R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile - Cards */}
+            <div className="sm:hidden divide-y divide-slate-100">
+              {ultimasPropostas.map((p) => (
+                <div key={p.id} className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</p>
+                      <p className="text-xs text-slate-600 mt-0.5">{p.nome_cliente}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded font-medium">
+                      {p.tipo_proposta_codigo}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-600 mt-3">
+                    <span>{new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                    <span className="font-medium">
+                      R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-right">
+                    <span className="text-xs text-slate-500">Comissão: </span>
+                    <span className="text-sm font-bold text-green-600">
+                      R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
