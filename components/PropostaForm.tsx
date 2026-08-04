@@ -76,6 +76,10 @@ export function PropostaForm() {
         prazo: prazo,
       });
 
+      // Pegar o user logado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado. Faça login novamente.");
+
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
@@ -89,6 +93,7 @@ export function PropostaForm() {
           comissao_pct: calc.comissao_pct,
           comissao_total: calc.comissao_total,
           is_consorcio: calc.is_consorcio,
+          user_id: user.id,
         })
         .select()
         .single();
@@ -151,128 +156,139 @@ export function PropostaForm() {
   }, {});
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="flex justify-center">
+      <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-2xl">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Nº Proposta</label>
+            <input
+              required
+              type="text"
+              value={form.numero_proposta}
+              onChange={(e) => setForm({ ...form, numero_proposta: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Ex: 123456"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Data</label>
+            <input
+              required
+              type="date"
+              value={form.data_proposta}
+              onChange={(e) => setForm({ ...form, data_proposta: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
         <div>
-          <label className="block text-sm font-medium mb-1">Nº Proposta</label>
+          <label className="block text-sm font-medium mb-1">Tipo de Proposta</label>
+          <select
+            required
+            value={form.tipo_proposta_codigo}
+            onChange={(e) => setForm({ ...form, tipo_proposta_codigo: e.target.value })}
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">Selecione...</option>
+            {Object.entries(categorias).map(([cat, lista]) => (
+              <optgroup key={cat} label={cat}>
+                {lista.map((t) => (
+                  <option key={t.codigo} value={t.codigo}>
+                    {t.nome}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Nome do Cliente</label>
           <input
             required
             type="text"
-            value={form.numero_proposta}
-            onChange={(e) => setForm({ ...form, numero_proposta: e.target.value })}
+            value={form.nome_cliente}
+            onChange={(e) => setForm({ ...form, nome_cliente: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="Ex: 123456"
+            placeholder="Nome completo"
           />
         </div>
+
         <div>
-          <label className="block text-sm font-medium mb-1">Data</label>
-          <input
-            required
-            type="date"
-            value={form.data_proposta}
-            onChange={(e) => setForm({ ...form, data_proposta: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1">Tipo de Proposta</label>
-        <select
-          required
-          value={form.tipo_proposta_codigo}
-          onChange={(e) => setForm({ ...form, tipo_proposta_codigo: e.target.value })}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-        >
-          <option value="">Selecione...</option>
-          {Object.entries(categorias).map(([cat, lista]) => (
-            <optgroup key={cat} label={cat}>
-              {lista.map((t) => (
-                <option key={t.codigo} value={t.codigo}>
-                  {t.nome}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1">Nome do Cliente</label>
-        <input
-          required
-          type="text"
-          value={form.nome_cliente}
-          onChange={(e) => setForm({ ...form, nome_cliente: e.target.value })}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          placeholder="Nome completo"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1">Valor Contratado (R$)</label>
-        <input
-          required
-          type="number"
-          step="0.01"
-          min="0"
-          value={form.valor_contratado}
-          onChange={(e) => setForm({ ...form, valor_contratado: e.target.value })}
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          placeholder="Ex: 50000.00"
-        />
-      </div>
-
-      {precisaTaxa && (
-        <div>
-          <label className="block text-sm font-medium mb-1">Taxa de Juros (% a.m)</label>
+          <label className="block text-sm font-medium mb-1">Valor Contratado (R$)</label>
           <input
             required
             type="number"
             step="0.01"
             min="0"
-            value={form.taxa_juros}
-            onChange={(e) => setForm({ ...form, taxa_juros: e.target.value })}
+            value={form.valor_contratado}
+            onChange={(e) => setForm({ ...form, valor_contratado: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="Ex: 2.15"
+            placeholder="Ex: 50000.00"
           />
         </div>
-      )}
 
-      {precisaPrazo && (
-        <div>
-          <label className="block text-sm font-medium mb-1">Prazo (meses)</label>
-          <input
-            required
-            type="number"
-            min="1"
-            value={form.prazo}
-            onChange={(e) => setForm({ ...form, prazo: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="Ex: 60"
-          />
+        {precisaTaxa && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Taxa de Juros (% a.m)</label>
+            <input
+              required
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.taxa_juros}
+              onChange={(e) => setForm({ ...form, taxa_juros: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Ex: 2.15"
+            />
+          </div>
+        )}
+
+        {precisaPrazo && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Prazo (meses)</label>
+            <input
+              required
+              type="number"
+              min="1"
+              value={form.prazo}
+              onChange={(e) => setForm({ ...form, prazo: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Ex: 60"
+            />
+          </div>
+        )}
+
+        {erro && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+            {erro}
+          </div>
+        )}
+
+        {resultado && (
+          <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm">
+            {resultado}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? "Salvando..." : "Salvar Proposta"}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/propostas")}
+            className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Cancelar
+          </button>
         </div>
-      )}
-
-      {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
-          ❌ {erro}
-        </div>
-      )}
-
-      {resultado && (
-        <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-sm">
-          {resultado}
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg disabled:opacity-50 transition-colors"
-      >
-        {loading ? "Salvando..." : "💾 Salvar Proposta"}
-      </button>
-    </form>
+      </form>
+    </div>
   );
 }
