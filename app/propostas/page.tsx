@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { Plus, Search, FileText, Pencil, Trash2 } from 'lucide-react'
-import { Paginacao } from '@/components/Paginacao' // ← NOVO
+import { Paginacao } from '@/components/Paginacao'
+import { FiltroMes } from '@/components/FiltroMes'
 
-const POR_PAGINA = 10 // ← NOVO
+const POR_PAGINA = 10
 
 interface Proposta {
   id: string
@@ -23,12 +24,12 @@ export default function PropostasPage() {
   const [propostas, setPropostas] = useState<Proposta[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [pagina, setPagina] = useState(1) // ← NOVO
+  const [pagina, setPagina] = useState(1)
+  const [mesFiltro, setMesFiltro] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadPropostas()
-  }, [])
+  useEffect(() => { loadPropostas() }, [])
+  useEffect(() => { setPagina(1) }, [search, mesFiltro])
 
   const loadPropostas = async () => {
     const { data, error } = await supabase
@@ -54,22 +55,18 @@ export default function PropostasPage() {
     }
   }
 
-  const filteredPropostas = propostas.filter(
-    (p) =>
+  // Filtro por mês + busca
+  const filtered = propostas.filter((p) => {
+    const matchMes = !mesFiltro || p.data_proposta?.startsWith(mesFiltro)
+    const matchSearch =
       p.numero_proposta?.toLowerCase().includes(search.toLowerCase()) ||
       p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
-  )
+    return matchMes && matchSearch
+  })
 
-  // ── PAGINAÇÃO ──
-  const totalPaginas = Math.ceil(filteredPropostas.length / POR_PAGINA)
-  const paginaSegura = Math.min(pagina, totalPaginas || 1)
-  const inicio = (paginaSegura - 1) * POR_PAGINA
-  const propostasPaginadas = filteredPropostas.slice(inicio, inicio + POR_PAGINA)
-
-  // Reseta pra página 1 ao buscar
-  useEffect(() => {
-    setPagina(1)
-  }, [search])
+  const totalPaginas = Math.ceil(filtered.length / POR_PAGINA)
+  const pag = Math.min(pagina, totalPaginas || 1)
+  const fatia = filtered.slice((pag - 1) * POR_PAGINA, pag * POR_PAGINA)
 
   if (loading) {
     return (
@@ -82,12 +79,14 @@ export default function PropostasPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
+
+        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Propostas</h1>
             <p className="text-sm sm:text-base text-slate-600">
-              {filteredPropostas.length} proposta{filteredPropostas.length !== 1 && 's'}
-              {search && ` encontrada${filteredPropostas.length !== 1 ? 's' : ''}`}
+              {filtered.length} proposta{filtered.length !== 1 && 's'}
+              {search && ` encontrada${filtered.length !== 1 ? 's' : ''}`}
             </p>
           </div>
           <Link
@@ -99,6 +98,7 @@ export default function PropostasPage() {
           </Link>
         </div>
 
+        {/* Busca */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -112,7 +112,14 @@ export default function PropostasPage() {
           </div>
         </div>
 
-        {/* Desktop */}
+        {/* Filtro por Mês */}
+        <FiltroMes
+          mesSelecionado={mesFiltro}
+          onSelecionar={setMesFiltro}
+          datasDisponiveis={propostas.map((p) => p.data_proposta)}
+        />
+
+        {/* Desktop Table */}
         <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -127,19 +134,23 @@ export default function PropostasPage() {
               </tr>
             </thead>
             <tbody>
-              {propostasPaginadas.map((p) => (
+              {fatia.map((p) => (
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4 font-medium text-slate-900">{p.numero_proposta}</td>
                   <td className="px-6 py-4 text-slate-700">{p.nome_cliente}</td>
-                  <td className="px-6 py-4 text-slate-700">{p.tipo_proposta_codigo}</td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                      {p.tipo_proposta_codigo}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-slate-700">
                     {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-6 py-4 text-slate-700">
-                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    {p.valor_contratado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
-                  <td className="px-6 py-4 font-semibold text-green-600">
-                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  <td className="px-6 py-4 font-semibold text-green-700">
+                    {p.comissao_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
@@ -164,7 +175,7 @@ export default function PropostasPage() {
             </tbody>
           </table>
 
-          {filteredPropostas.length === 0 && (
+          {filtered.length === 0 && (
             <div className="text-center py-12 text-slate-500">
               <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Nenhuma proposta encontrada</p>
@@ -172,58 +183,57 @@ export default function PropostasPage() {
           )}
         </div>
 
-        {/* Mobile */}
+        {/* Mobile Cards */}
         <div className="lg:hidden space-y-4">
-          {propostasPaginadas.map((p) => (
+          {fatia.map((p) => (
             <div key={p.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="font-semibold text-slate-900 text-sm">{p.numero_proposta}</p>
-                  <p className="text-slate-600 text-sm">{p.nome_cliente}</p>
+                  <p className="text-slate-600 text-xs">{p.nome_cliente}</p>
                 </div>
-                <div className="flex gap-2">
-                  <Link
-                    href={`/propostas/${p.id}/editar`}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(p.id, p.numero_proposta)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                  {p.tipo_proposta_codigo}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                <div>
+                  <p className="text-slate-500 text-xs">Data</p>
+                  <p className="font-medium text-slate-900">
+                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Valor</p>
+                  <p className="font-medium text-slate-900">
+                    {p.valor_contratado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Comissão</p>
+                  <p className="font-semibold text-green-700">
+                    {p.comissao_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
                 </div>
               </div>
-              <div className="space-y-1.5 text-xs sm:text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Tipo</span>
-                  <span className="text-slate-700">{p.tipo_proposta_codigo}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Data</span>
-                  <span className="text-slate-700">
-                    {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Valor</span>
-                  <span className="text-slate-700">
-                    R$ {p.valor_contratado?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Comissão</span>
-                  <span className="font-semibold text-green-600">
-                    R$ {p.comissao_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-                  </span>
-                </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <Link
+                  href={`/propostas/${p.id}/editar`}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <Pencil className="w-4 h-4" />
+                </Link>
+                <button
+                  onClick={() => handleDelete(p.id, p.numero_proposta)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}
 
-          {filteredPropostas.length === 0 && (
+          {filtered.length === 0 && (
             <div className="text-center py-12 text-slate-500">
               <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Nenhuma proposta encontrada</p>
@@ -231,10 +241,12 @@ export default function PropostasPage() {
           )}
         </div>
 
-        {/* ── PAGINAÇÃO ── */}
+        {/* Paginação */}
         <Paginacao
-          paginaAtual={paginaSegura}
+          paginaAtual={pag}
           totalPaginas={totalPaginas}
+          totalItens={filtered.length}
+          itensPorPagina={POR_PAGINA}
           onMudar={setPagina}
         />
       </div>
