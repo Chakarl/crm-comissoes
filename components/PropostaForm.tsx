@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase";
 import { calcularComissao } from "@/lib/calcularComissao";
 import { gerarParcelasConsorcio, gerarParcelaUnica } from "@/lib/gerarParcelas";
 import { useRouter } from "next/navigation";
+import { Loader2, CheckCircle, UserPlus } from "lucide-react";
 
 const supabase = createClient();
 
@@ -46,7 +47,6 @@ function maskTelefone(v: string) {
     .replace(/(\d{5})(\d{1,4})$/, "$1-$2");
 }
 
-// Formata centavos → "R$ 1.234,56"
 function maskBRL(v: string) {
   const nums = v.replace(/\D/g, "");
   if (!nums) return "";
@@ -57,7 +57,6 @@ function maskBRL(v: string) {
   });
 }
 
-// Extrai float de "R$ 1.234,56" → 1234.56
 function parseBRL(v: string): number {
   const nums = v.replace(/\D/g, "");
   if (!nums) return 0;
@@ -70,6 +69,11 @@ export function PropostaForm() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  // ─── Estado da busca automática de CPF ───
+  const [buscandoCpf, setBuscandoCpf] = useState(false);
+  const [clienteEncontrado, setClienteEncontrado] = useState(false);
+  const [clienteId, setClienteId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     numero_proposta: "",
@@ -94,6 +98,56 @@ export function PropostaForm() {
         if (data) setTipos(data);
       });
   }, []);
+
+  // ─── BUSCA AUTOMÁTICA AO DIGITAR CPF ───
+  useEffect(() => {
+    const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
+
+    if (cpfLimpo.length !== 11) {
+      setClienteEncontrado(false);
+      setClienteId(null);
+      return;
+    }
+
+    // CPF com máscara (formato do banco)
+    const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
+
+    const timeout = setTimeout(async () => {
+      setBuscandoCpf(true);
+      try {
+        // Busca nos dois formatos pra garantir
+        const { data } = await supabase
+          .from("clientes")
+          .select("*")
+          .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (data) {
+          setClienteEncontrado(true);
+          setClienteId(data.id);
+          setForm((prev) => ({
+            ...prev,
+            nome_cliente: data.nome || prev.nome_cliente,
+            telefone_cliente: data.telefone ? maskTelefone(data.telefone) : prev.telefone_cliente,
+            agencia_cliente: data.agencia || prev.agencia_cliente,
+            conta_cliente: data.conta || prev.conta_cliente,
+          }));
+        } else {
+          setClienteEncontrado(false);
+          setClienteId(null);
+        }
+      } catch (err) {
+        console.error("Erro busca CPF:", err);
+        setClienteEncontrado(false);
+        setClienteId(null);
+      } finally {
+        setBuscandoCpf(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [form.cpf_cliente]);
 
   const precisaTaxa = !TIPOS_SEM_TAXA.includes(form.tipo_proposta_codigo);
   const precisaPrazo = !TIPOS_SEM_PRAZO.includes(form.tipo_proposta_codigo);
@@ -123,38 +177,33 @@ export function PropostaForm() {
 
       /* ─── Upsert cliente ─── */
       const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
-      let clienteId: string | null = null;
+      const cpfMascara = cpfLimpo.length === 11
+        ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
+        : "";
+      let idCliente = clienteId;
 
-      if (cpfLimpo.length === 11) {
-        const { data: clienteExistente } = await supabase
+      if (cpfLimpo.length === 11 && !idCliente) {
+        const { data: novoCli, error: errCli } = await supabase
           .from("clientes")
-          .select("id")
-          .eq("cpf", cpfLimpo)
-          .maybeSingle();
-
-        if (clienteExistente) {
-          clienteId = clienteExistente.id;
-          await supabase.from("clientes").update({
+          .insert({
             nome: form.nome_cliente,
+            cpf: cpfMascara, // salva com máscara, igual ao padrão do banco
             telefone: form.telefone_cliente.replace(/\D/g, "") || null,
             agencia: form.agencia_cliente || null,
             conta: form.conta_cliente || null,
-          }).eq("id", clienteId);
-        } else {
-          const { data: novoCli, error: errCli } = await supabase
-            .from("clientes")
-            .insert({
-              nome: form.nome_cliente,
-              cpf: cpfLimpo,
-              telefone: form.telefone_cliente.replace(/\D/g, "") || null,
-              agencia: form.agencia_cliente || null,
-              conta: form.conta_cliente || null,
-            })
-            .select("id")
-            .single();
-          if (errCli) throw errCli;
-          clienteId = novoCli.id;
-        }
+          })
+          .select("id")
+          .single();
+        if (errCli) throw errCli;
+        idCliente = novoCli.id;
+      } else if (idCliente) {
+        // Atualiza dados do cliente existente
+        await supabase.from("clientes").update({
+          nome: form.nome_cliente,
+          telefone: form.telefone_cliente.replace(/\D/g, "") || null,
+          agencia: form.agencia_cliente || null,
+          conta: form.conta_cliente || null,
+        }).eq("id", idCliente);
       }
 
       /* ─── Salva proposta ─── */
@@ -165,7 +214,7 @@ export function PropostaForm() {
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
           nome_cliente: form.nome_cliente,
-          cpf_cliente: cpfLimpo || null,
+          cpf_cliente: cpfMascara || null,
           telefone_cliente: form.telefone_cliente.replace(/\D/g, "") || null,
           agencia_cliente: form.agencia_cliente || null,
           conta_cliente: form.conta_cliente || null,
@@ -176,7 +225,7 @@ export function PropostaForm() {
           comissao_pct: calc.comissao_pct,
           comissao_total: calc.comissao_total,
           is_consorcio: calc.is_consorcio,
-          cliente_id: clienteId,
+          cliente_id: idCliente,
           user_id: user.id,
         })
         .select()
@@ -230,6 +279,8 @@ export function PropostaForm() {
         taxa_juros: "",
         prazo: "",
       });
+      setClienteEncontrado(false);
+      setClienteId(null);
     } catch (err: any) {
       setErro(err.message || "Erro ao salvar");
     } finally {
@@ -242,6 +293,8 @@ export function PropostaForm() {
     acc[t.categoria].push(t);
     return acc;
   }, {});
+
+  const cpfCompleto = form.cpf_cliente.replace(/\D/g, "").length === 11;
 
   return (
     <div className="flex justify-center">
@@ -294,30 +347,57 @@ export function PropostaForm() {
           </select>
         </div>
 
-        {/* Nome + CPF */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Nome do Cliente</label>
-            <input
-              required
-              type="text"
-              value={form.nome_cliente}
-              onChange={(e) => setForm({ ...form, nome_cliente: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="Nome completo"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">CPF</label>
+        {/* CPF com busca automática */}
+        <div>
+          <label className="block text-sm font-medium mb-1">CPF</label>
+          <div className="relative">
             <input
               type="text"
               inputMode="numeric"
               value={form.cpf_cliente}
               onChange={(e) => setForm({ ...form, cpf_cliente: maskCPF(e.target.value) })}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className="w-full border rounded-lg px-3 py-2 pr-10 text-sm"
               placeholder="000.000.000-00"
             />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              {buscandoCpf && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
+              {!buscandoCpf && clienteEncontrado && <CheckCircle className="w-4 h-4 text-emerald-500" />}
+            </div>
           </div>
+
+          {/* Badge de status */}
+          {cpfCompleto && !buscandoCpf && (
+            <div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
+              clienteEncontrado
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            }`}>
+              {clienteEncontrado ? (
+                <>
+                  <CheckCircle className="w-3 h-3" />
+                  Cliente encontrado — campos preenchidos
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-3 h-3" />
+                  Novo cliente — preencha os dados
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Nome */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Nome do Cliente</label>
+          <input
+            required
+            type="text"
+            value={form.nome_cliente}
+            onChange={(e) => setForm({ ...form, nome_cliente: e.target.value })}
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            placeholder="Nome completo"
+          />
         </div>
 
         {/* Telefone + Agência + Conta */}
@@ -356,7 +436,7 @@ export function PropostaForm() {
           </div>
         </div>
 
-        {/* Valor Contratado (R$) */}
+        {/* Valor Contratado */}
         <div>
           <label className="block text-sm font-medium mb-1">Valor Contratado</label>
           <input
