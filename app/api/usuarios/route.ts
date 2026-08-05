@@ -33,9 +33,25 @@ export async function POST(request: Request) {
 
     const senhaHash = await bcrypt.hash(senha, 10)
 
+    // 1. Cria o usuário no Auth do Supabase
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true
+    })
+
+    if (authError) {
+      if (authError.message.includes('already been registered')) {
+        return NextResponse.json({ erro: 'Email já cadastrado' }, { status: 400 })
+      }
+      throw authError
+    }
+
+    // 2. Insere na tabela usuarios usando o MESMO ID do Auth
     const { data, error } = await supabaseAdmin
       .from('usuarios')
       .insert({
+        id: authUser.user.id,
         email,
         senha_hash: senhaHash,
         nome,
@@ -46,6 +62,9 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
+      // Se falhar o insert, remove o usuário do Auth pra não ficar órfão
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+
       if (error.code === '23505') {
         return NextResponse.json({ erro: 'Email já cadastrado' }, { status: 400 })
       }
