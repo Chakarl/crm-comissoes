@@ -107,8 +107,8 @@ export default function DashboardPage() {
 
         // Propostas do mês atual
         const doMes = todas.filter((p) => {
-          const d = new Date(p.data_proposta)
-          return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
+        const mesProposta = (p.data_proposta as string)?.slice(0, 7)
+        return mesProposta === mesAtualStr
         })
 
         // Comissão do ano
