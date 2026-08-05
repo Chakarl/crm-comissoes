@@ -77,7 +77,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function DashboardPage() {
   const [propostasMes, setPropostasMes] = useState(0)
-  const [comissaoMes, setComissaoMes] = useState(0)
   const [aReceberProxMes, setAReceberProxMes] = useState(0)
   const [comissaoAno, setComissaoAno] = useState(0)
   const [ultimasPropostas, setUltimasPropostas] = useState<any[]>([])
@@ -111,8 +110,6 @@ export default function DashboardPage() {
           const d = new Date(p.data_proposta)
           return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
         })
-        setPropostasMes(doMes.length)
-        setComissaoMes(doMes.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
         // Comissão do ano
         const doAno = todas.filter((p) => {
@@ -233,13 +230,6 @@ export default function DashboardPage() {
       subtitle: null,
     },
     {
-      title: 'Comissões do Mês',
-      value: `R$ ${fmt(comissaoMes)}`,
-      icon: Calendar,
-      color: 'bg-amber-500',
-      subtitle: null,
-    },
-    {
       title: `A Receber em ${proxMesLabel}`,
       value: `R$ ${fmt(aReceberProxMes)}`,
       icon: DollarSign,
@@ -264,7 +254,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Cards — agora 4 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {cards.map((card) => {
             const Icon = card.icon
             return (
