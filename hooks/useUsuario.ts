@@ -15,46 +15,54 @@ export function useUsuario() {
 
   useEffect(() => {
     async function load() {
-      // 1) Tenta Supabase Auth primeiro
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (user) {
-        const { data } = await supabase
+      console.log('AUTH USER:', user)
+
+      if (!user) {
+        console.log('SEM AUTH USER')
+        setLoading(false)
+        return
+      }
+
+      // Tenta por auth_id
+      let { data, error } = await supabase
+        .from('usuarios')
+        .select('id, is_master')
+        .eq('auth_id', user.id)
+        .maybeSingle()
+
+      console.log('BUSCA POR auth_id:', data, error)
+
+      // Se não achou por auth_id, tenta por email
+      if (!data && user.email) {
+        const result = await supabase
           .from('usuarios')
           .select('id, is_master')
-          .eq('auth_id', user.id)
+          .eq('email', user.email)
           .maybeSingle()
 
+        data = result.data
+        error = result.error
+        console.log('BUSCA POR email:', data, error)
+
+        // Se achou por email, atualiza o auth_id pra próxima vez
         if (data) {
-          setUsuario(data)
-          setLoading(false)
-          return
+          await supabase
+            .from('usuarios')
+            .update({ auth_id: user.id })
+            .eq('id', data.id)
+
+          console.log('auth_id atualizado para o usuario', data.id)
         }
       }
 
-      // 2) Fallback: localStorage (login legado)
-      try {
-        const stored = localStorage.getItem('usuario')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (parsed?.id) {
-            const { data } = await supabase
-              .from('usuarios')
-              .select('id, is_master')
-              .eq('id', parsed.id)
-              .maybeSingle()
-
-            if (data) {
-              setUsuario(data)
-              setLoading(false)
-              return
-            }
-          }
-        }
-      } catch {
-        // localStorage indisponível ou JSON inválido
+      if (data) {
+        setUsuario(data)
+      } else {
+        console.log('USUARIO NAO ENCONTRADO NA TABELA')
       }
 
       setLoading(false)
