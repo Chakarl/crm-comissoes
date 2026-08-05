@@ -110,6 +110,7 @@ export default function DashboardPage() {
         const mesProposta = (p.data_proposta as string)?.slice(0, 7)
         return mesProposta === mesAtualStr
         })
+        setPropostasMes(doMes.length) 
 
         // Comissão do ano
         const doAno = todas.filter((p) => {
