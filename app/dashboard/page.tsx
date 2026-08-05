@@ -453,7 +453,7 @@ export default function DashboardPage() {
 
             <div className="divide-y divide-slate-100">
               {ultimasPropostas.map((p) => (
-                <Link
+                <div
                   key={p.id}
                   href={`/propostas/${p.id}`}
                   className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 hover:bg-slate-50 transition-colors"
@@ -473,7 +473,7 @@ export default function DashboardPage() {
                       {new Date(p.data_proposta).toLocaleDateString('pt-BR')}
                     </div>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           </div>
