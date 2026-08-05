@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useUsuario } from '@/hooks/useUsuario'
 import Link from 'next/link'
 import {
   FileText,
@@ -12,6 +13,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   DollarSign,
+  Users,
+  Crown,
 } from 'lucide-react'
 import {
   Bar,
@@ -76,6 +79,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 }
 
 export default function DashboardPage() {
+  const { usuario, loading: loadingUser } = useUsuario()
+  const supabase = createClient()
+
   const [propostasMes, setPropostasMes] = useState(0)
   const [aReceberProxMes, setAReceberProxMes] = useState(0)
   const [comissaoAno, setComissaoAno] = useState(0)
@@ -83,13 +89,23 @@ export default function DashboardPage() {
   const [timeline, setTimeline] = useState<ParcelaAgrupada[]>([])
   const [mesSelecionado, setMesSelecionado] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+
+  // Master-only
+  const [totalCorretores, setTotalCorretores] = useState(0)
+  const [rankingCorretores, setRankingCorretores] = useState<
+    { usuario_id: string; nome: string; propostas: number; comissao: number }[]
+  >([])
+  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
+  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
 
   useEffect(() => {
-    loadDashboard()
-  }, [])
+    if (!loadingUser && usuario) loadDashboard()
+  }, [loadingUser, usuario, corretorFiltro])
 
   const loadDashboard = async () => {
+    if (!usuario) return
+    setLoading(true)
+
     try {
       const now = new Date()
       const anoAtual = now.getFullYear()
@@ -97,27 +113,81 @@ export default function DashboardPage() {
       const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
       const proxMesStr = addMeses(mesAtualStr, 1)
 
-      const { data: todas } = await supabase
+      // ── Corretores (master only) ──
+      let todosUsuariosLocal: { id: string; nome: string; is_master: boolean }[] = []
+
+      if (usuario.is_master) {
+        const { data: usuarios } = await supabase
+          .from('usuarios')
+          .select('id, nome, is_master')
+          .order('nome')
+
+        if (usuarios) {
+          todosUsuariosLocal = usuarios
+          const corretores = usuarios.filter((u) => !u.is_master)
+          setListaCorretores(corretores.map((u) => ({ id: u.id, nome: u.nome || 'Sem nome' })))
+          setTotalCorretores(corretores.length)
+        }
+      }
+
+      // ── Propostas ──
+      let query = supabase
         .from('propostas')
-        .select('id, comissao_total, data_proposta, numero_proposta, nome_cliente, tipo_proposta_codigo, valor_contratado')
+        .select(
+          'id, comissao_total, data_proposta, numero_proposta, nome_cliente, tipo_proposta_codigo, valor_contratado, usuario_id'
+        )
         .order('data_proposta', { ascending: false })
+
+      if (!usuario.is_master) {
+        query = query.eq('usuario_id', usuario.id)
+      } else if (corretorFiltro !== 'todos') {
+        query = query.eq('usuario_id', corretorFiltro)
+      }
+
+      const { data: todas } = await query
 
       if (todas) {
         setUltimasPropostas(todas.slice(0, 5))
 
         // Propostas do mês atual
         const doMes = todas.filter((p) => {
-        const mesProposta = (p.data_proposta as string)?.slice(0, 7)
-        return mesProposta === mesAtualStr
+          const mesProposta = (p.data_proposta as string)?.slice(0, 7)
+          return mesProposta === mesAtualStr
         })
-        setPropostasMes(doMes.length) 
+        setPropostasMes(doMes.length)
 
         // Comissão do ano
         const doAno = todas.filter((p) => {
-          const d = new Date(p.data_proposta)
           return (p.data_proposta as string)?.startsWith(String(anoAtual))
         })
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
+
+        // ── Ranking corretores (master, visão todos) ──
+        if (usuario.is_master && corretorFiltro === 'todos') {
+          const mapaRank: Record<
+            string,
+            { usuario_id: string; nome: string; propostas: number; comissao: number }
+          > = {}
+          for (const p of todas) {
+            const uid = p.usuario_id
+            if (!mapaRank[uid]) {
+              const usr = todosUsuariosLocal.find((u) => u.id === uid)
+              mapaRank[uid] = {
+                usuario_id: uid,
+                nome: usr?.nome || 'Desconhecido',
+                propostas: 0,
+                comissao: 0,
+              }
+            }
+            if ((p.data_proposta as string)?.startsWith(String(anoAtual))) {
+              mapaRank[uid].propostas += 1
+              mapaRank[uid].comissao += p.comissao_total || 0
+            }
+          }
+          setRankingCorretores(
+            Object.values(mapaRank).sort((a, b) => b.comissao - a.comissao)
+          )
+        }
 
         // ============================================
         // TIMELINE + CÁLCULO "A RECEBER PRÓX. MÊS"
@@ -141,7 +211,6 @@ export default function DashboardPage() {
           const tipo = p.tipo_proposta_codigo?.toLowerCase() || ''
 
           if (tipo.includes('consorcio') || tipo.includes('consórcio')) {
-            // Consórcio: divide em 5 parcelas, mês+1 até mês+5
             const parcelaMensal = valor / 5
             for (let i = 1; i <= 5; i++) {
               const mesReceb = addMeses(mesBase, i)
@@ -151,7 +220,6 @@ export default function DashboardPage() {
               mapa[mesReceb].recebido += parcelaMensal
             }
           } else {
-            // Outros produtos: comissão inteira no mês seguinte
             const mesReceb = addMeses(mesBase, 1)
             if (!mapa[mesReceb]) {
               mapa[mesReceb] = { mes: mesReceb, label: mesLabel(mesReceb), total: 0, recebido: 0, qtd: 0 }
@@ -163,7 +231,6 @@ export default function DashboardPage() {
         const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
         setTimeline(lista)
 
-        // "A Receber Próx. Mês" = campo recebido do mês seguinte ao atual
         const dadosProxMes = lista.find((m) => m.mes === proxMesStr)
         setAReceberProxMes(dadosProxMes?.recebido || 0)
 
@@ -210,9 +277,10 @@ export default function DashboardPage() {
     }
   })
 
-  const variacao = dadosMes && idxAtual > 0
-    ? ((dadosMes.total - timeline[idxAtual - 1].total) / (timeline[idxAtual - 1].total || 1)) * 100
-    : 0
+  const variacao =
+    dadosMes && idxAtual > 0
+      ? ((dadosMes.total - timeline[idxAtual - 1].total) / (timeline[idxAtual - 1].total || 1)) * 100
+      : 0
 
   if (loading) {
     return (
@@ -254,7 +322,7 @@ export default function DashboardPage() {
           <p className="text-sm sm:text-base text-slate-600">Visão geral do sistema</p>
         </div>
 
-        {/* Cards — agora 4 */}
+        {/* Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {cards.map((card) => {
             const Icon = card.icon
@@ -274,6 +342,32 @@ export default function DashboardPage() {
             )
           })}
         </div>
+
+        {/* ── Filtro + Corretores Ativos (master only) ── */}
+        {usuario?.is_master && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 sm:mb-8">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3">
+              <Users className="w-5 h-5 text-violet-500" />
+              <div>
+                <div className="text-xs text-slate-500">Corretores Ativos</div>
+                <div className="text-lg font-bold text-slate-900">{totalCorretores}</div>
+              </div>
+            </div>
+
+            <select
+              value={corretorFiltro}
+              onChange={(e) => setCorretorFiltro(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="todos">Todos os Corretores</option>
+              {listaCorretores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Gráfico Evolução Mensal */}
         {ultimos12.length > 0 && (
@@ -328,7 +422,15 @@ export default function DashboardPage() {
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} iconType="circle" />
                   <Bar dataKey="total" name="Total Gerado" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={28} />
                   <Bar dataKey="recebido" name="Recebido" fill="#10b981" radius={[6, 6, 0, 0]} barSize={28} />
-                  <Line type="monotone" dataKey="total" name="Tendência Gerado" stroke="#1d4ed8" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    name="Tendência Gerado"
+                    stroke="#1d4ed8"
+                    strokeWidth={2}
+                    dot={false}
+                    strokeDasharray="5 5"
+                  />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -347,8 +449,18 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height={280}>
                 <ComposedChart data={dadosAcumulados} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={formatCurrencyShort} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={formatCurrencyShort}
+                  />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} iconType="circle" />
                   <Area type="monotone" dataKey="Total Acumulado" fill="#dbeafe" stroke="#3b82f6" strokeWidth={2} />
@@ -379,7 +491,13 @@ export default function DashboardPage() {
                     onClick={() => setMesSelecionado(m.mes)}
                     className={`
                       flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap
-                      ${isAtual ? 'bg-blue-600 text-white' : isHoje ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}
+                      ${
+                        isAtual
+                          ? 'bg-blue-600 text-white'
+                          : isHoje
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }
                     `}
                   >
                     {m.label}
@@ -417,18 +535,58 @@ export default function DashboardPage() {
 
                   <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
                     <div className="text-xs font-medium text-emerald-600 mb-1">Recebido</div>
-                    <div className="text-xl sm:text-2xl font-bold text-emerald-900">R$ {fmt(dadosMes.recebido)}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-900">
+                      R$ {fmt(dadosMes.recebido)}
+                    </div>
                     <div className="text-xs text-emerald-500 mt-1">Consórcio 5x + outros 1x</div>
                   </div>
 
                   <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                     <div className="text-xs font-medium text-amber-600 mb-1">Diferença</div>
-                    <div className="text-xl sm:text-2xl font-bold text-amber-900">R$ {fmt(dadosMes.total - dadosMes.recebido)}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-amber-900">
+                      R$ {fmt(dadosMes.total - dadosMes.recebido)}
+                    </div>
                     <div className="text-xs text-amber-500 mt-1">Gerado − Recebido</div>
                   </div>
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Ranking Corretores (master only) ── */}
+        {usuario?.is_master && corretorFiltro === 'todos' && rankingCorretores.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 mb-6 sm:mb-8">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">🏆 Ranking de Corretores</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Por comissão gerada no ano</p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {rankingCorretores.map((c, idx) => (
+                <div key={c.usuario_id} className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        idx === 0
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : idx === 1
+                          ? 'bg-slate-100 text-slate-600'
+                          : idx === 2
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-slate-50 text-slate-500'
+                      }`}
+                    >
+                      {idx === 0 ? <Crown className="w-4 h-4" /> : idx + 1}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">{c.nome}</div>
+                      <div className="text-xs text-slate-500">{c.propostas} proposta(s)</div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-bold text-slate-900">R$ {fmt(c.comissao)}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -446,7 +604,6 @@ export default function DashboardPage() {
               {ultimasPropostas.map((p) => (
                 <div
                   key={p.id}
-                  href={`/propostas/${p.id}`}
                   className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 hover:bg-slate-50 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
