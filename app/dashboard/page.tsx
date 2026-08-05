@@ -47,7 +47,10 @@ interface CorretorResumo {
 
 /* ── helpers ────────────────────────────────────────── */
 
-const MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+const MESES_PT = [
+  'Jan','Fev','Mar','Abr','Mai','Jun',
+  'Jul','Ago','Set','Out','Nov','Dez',
+]
 
 function mesLabel(iso: string) {
   const [ano, m] = iso.split('-')
@@ -68,7 +71,8 @@ const formatCurrencyShort = (value: number) => {
   return `R$ ${value.toFixed(0)}`
 }
 
-const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+const fmt = (v: number) =>
+  v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
@@ -78,7 +82,10 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       {payload.map((entry: any, idx: number) => (
         <div key={idx} className="flex items-center justify-between gap-4 py-1">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
             <span className="text-xs text-slate-600">{entry.name}</span>
           </div>
           <span className="text-xs font-bold text-slate-900">
@@ -108,7 +115,9 @@ export default function DashboardPage() {
   const [totalCorretores, setTotalCorretores] = useState(0)
   const [rankingCorretores, setRankingCorretores] = useState<CorretorResumo[]>([])
   const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
+  const [listaCorretores, setListaCorretores] = useState<
+    { id: string; nome: string }[]
+  >([])
 
   useEffect(() => {
     if (!loadingUser && usuario) loadDashboard()
@@ -127,20 +136,29 @@ export default function DashboardPage() {
       const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
       const proxMesStr = addMeses(mesAtualStr, 1)
 
-      /* ── corretores (master only) ── */
-      let corretoresLocal: { id: string; nome: string }[] = []
+      /* ───────────────────────────────────────────────
+         MAPA DE TODOS OS USUÁRIOS (para resolver nomes)
+         + lista de corretores não-master (para dropdown)
+      ─────────────────────────────────────────────── */
+      let todosUsuarios: { id: string; nome: string; is_master: boolean }[] = []
+      let corretoresDropdown: { id: string; nome: string }[] = []
 
       if (usuario.is_master) {
         const { data: usuarios } = await supabase
           .from('usuarios')
-          .select('id, nome')
-          .eq('is_master', false)
+          .select('id, nome, is_master')
           .order('nome')
 
         if (usuarios) {
-          corretoresLocal = usuarios
-          setListaCorretores(usuarios)
-          setTotalCorretores(usuarios.length)
+          todosUsuarios = usuarios
+
+          // Dropdown: só não-master
+          corretoresDropdown = usuarios
+            .filter((u) => !u.is_master)
+            .map((u) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
+
+          setListaCorretores(corretoresDropdown)
+          setTotalCorretores(corretoresDropdown.length)
         }
       }
 
@@ -173,29 +191,36 @@ export default function DashboardPage() {
         const doAno = todas.filter((p) =>
           (p.data_proposta as string)?.startsWith(String(anoAtual))
         )
-        setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
+        setComissaoAno(
+          doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0)
+        )
 
-        /* ── ranking corretores (master, visão "todos") ── */
+        /* ── ranking (master, visão "todos") ── */
         if (usuario.is_master && corretorFiltro === 'todos') {
           const mapaCorretores: Record<string, CorretorResumo> = {}
           for (const p of todas) {
             const uid = p.usuario_id
             if (!mapaCorretores[uid]) {
-              const corretor = corretoresLocal.find((c) => c.id === uid)
+              // Busca nome no mapa completo (inclui masters)
+              const usr = todosUsuarios.find((u) => u.id === uid)
               mapaCorretores[uid] = {
                 usuario_id: uid,
-                nome: corretor?.nome || 'Sem nome',
+                nome: usr?.nome || 'Desconhecido',
                 propostas: 0,
                 comissao: 0,
               }
             }
-            if ((p.data_proposta as string)?.startsWith(String(anoAtual))) {
+            if (
+              (p.data_proposta as string)?.startsWith(String(anoAtual))
+            ) {
               mapaCorretores[uid].propostas += 1
               mapaCorretores[uid].comissao += p.comissao_total || 0
             }
           }
           setRankingCorretores(
-            Object.values(mapaCorretores).sort((a, b) => b.comissao - a.comissao)
+            Object.values(mapaCorretores).sort(
+              (a, b) => b.comissao - a.comissao
+            )
           )
         }
 
@@ -205,7 +230,13 @@ export default function DashboardPage() {
         for (const p of todas) {
           const mes = (p.data_proposta as string).slice(0, 7)
           if (!mapa[mes])
-            mapa[mes] = { mes, label: mesLabel(mes), total: 0, recebido: 0, qtd: 0 }
+            mapa[mes] = {
+              mes,
+              label: mesLabel(mes),
+              total: 0,
+              recebido: 0,
+              qtd: 0,
+            }
           mapa[mes].total += p.comissao_total || 0
           mapa[mes].qtd += 1
         }
@@ -215,7 +246,10 @@ export default function DashboardPage() {
           const valor = p.comissao_total || 0
           const tipo = p.tipo_proposta_codigo?.toLowerCase() || ''
 
-          if (tipo.includes('consorcio') || tipo.includes('consórcio')) {
+          if (
+            tipo.includes('consorcio') ||
+            tipo.includes('consórcio')
+          ) {
             const parcelaMensal = valor / 5
             for (let i = 1; i <= 5; i++) {
               const mesReceb = addMeses(mesBase, i)
@@ -243,15 +277,17 @@ export default function DashboardPage() {
           }
         }
 
-        const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
+        const lista = Object.values(mapa).sort((a, b) =>
+          a.mes.localeCompare(b.mes)
+        )
         setTimeline(lista)
 
         const dadosProxMes = lista.find((m) => m.mes === proxMesStr)
         setAReceberProxMes(dadosProxMes?.recebido || 0)
 
-        setMesSelecionado(
-          lista.find((m) => m.mes === mesAtualStr)?.mes || lista[lista.length - 1]?.mes || null
-        )
+        if (!mesSelecionado) {
+          setMesSelecionado(mesAtualStr)
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar dashboard:', err)
@@ -260,166 +296,182 @@ export default function DashboardPage() {
     }
   }
 
-  /* ── derivados ────────────────────────────────────── */
+  /* ── navegação mensal ─────────────────────────────── */
 
-  const idxAtual = timeline.findIndex((m) => m.mes === mesSelecionado)
-  const mesAnterior = idxAtual > 0 ? timeline[idxAtual - 1].mes : null
-  const mesProximo = idxAtual < timeline.length - 1 ? timeline[idxAtual + 1].mes : null
-  const dadosMes = timeline.find((m) => m.mes === mesSelecionado)
+  const dadosMesSelecionado = timeline.find(
+    (t) => t.mes === mesSelecionado
+  )
 
-  const now2 = new Date()
-  const mesAtualStr2 = `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`
-  const proxMesLabel = mesLabel(addMeses(mesAtualStr2, 1))
+  const idxMes = timeline.findIndex((t) => t.mes === mesSelecionado)
 
-  const ultimos12 = timeline
-    .filter((m) => m.mes <= mesAtualStr2)
-    .slice(-12)
-    .map((m) => ({ ...m, totalFormatado: m.total, recebidoFormatado: m.recebido }))
-
-  let acumuladoTotal = 0
-  let acumuladoRecebido = 0
-  const dadosAcumulados = ultimos12.map((m) => {
-    acumuladoTotal += m.total
-    acumuladoRecebido += m.recebido
-    return {
-      label: m.label,
-      'Total Acumulado': acumuladoTotal,
-      'Recebido Acumulado': acumuladoRecebido,
-    }
-  })
+  const mesAnteriorData =
+    idxMes > 0 ? timeline[idxMes - 1] : null
 
   const variacao =
-    dadosMes && idxAtual > 0
-      ? ((dadosMes.total - timeline[idxAtual - 1].total) /
-          (timeline[idxAtual - 1].total || 1)) *
-        100
-      : 0
+    dadosMesSelecionado && mesAnteriorData && mesAnteriorData.total > 0
+      ? (
+          ((dadosMesSelecionado.total - mesAnteriorData.total) /
+            mesAnteriorData.total) *
+          100
+        ).toFixed(1)
+      : null
 
-  /* ── loading ──────────────────────────────────────── */
+  const navegarMes = (dir: 'prev' | 'next') => {
+    if (dir === 'prev' && idxMes > 0)
+      setMesSelecionado(timeline[idxMes - 1].mes)
+    if (dir === 'next' && idxMes < timeline.length - 1)
+      setMesSelecionado(timeline[idxMes + 1].mes)
+  }
 
-  if (loading || loadingUser) {
+  /* ── loading / sem usuário ────────────────────────── */
+
+  if (loadingUser || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-slate-600">Carregando dashboard...</div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     )
   }
 
-  /* ── cards ────────────────────────────────────────── */
+  if (!usuario) {
+    return (
+      <div className="text-center py-12 text-slate-500">
+        Usuário não encontrado.
+      </div>
+    )
+  }
 
-  const cards = usuario?.is_master
-    ? [
-        {
-          title: 'Corretores Ativos',
-          value: totalCorretores,
-          icon: Users,
-          color: 'bg-indigo-500',
-          subtitle: 'Usuários cadastrados',
-        },
-        {
-          title: 'Propostas do Mês',
-          value: propostasMes,
-          icon: FileText,
-          color: 'bg-blue-500',
-          subtitle: corretorFiltro === 'todos' ? 'Todos os corretores' : 'Corretor selecionado',
-        },
-        {
-          title: `A Receber em ${proxMesLabel}`,
-          value: `R$ ${fmt(aReceberProxMes)}`,
-          icon: DollarSign,
-          color: 'bg-violet-500',
-          subtitle: 'Parcelas consórcio + comissões',
-        },
-        {
-          title: 'Comissão do Ano',
-          value: `R$ ${fmt(comissaoAno)}`,
-          icon: TrendingUp,
-          color: 'bg-emerald-500',
-          subtitle: corretorFiltro === 'todos' ? 'Total da equipe' : 'Corretor selecionado',
-        },
-      ]
-    : [
-        {
-          title: 'Propostas do Mês',
-          value: propostasMes,
-          icon: FileText,
-          color: 'bg-blue-500',
-          subtitle: null,
-        },
-        {
-          title: `A Receber em ${proxMesLabel}`,
-          value: `R$ ${fmt(aReceberProxMes)}`,
-          icon: DollarSign,
-          color: 'bg-violet-500',
-          subtitle: 'Parcelas consórcio + comissões do mês',
-        },
-        {
-          title: 'Comissão do Ano',
-          value: `R$ ${fmt(comissaoAno)}`,
-          icon: TrendingUp,
-          color: 'bg-emerald-500',
-          subtitle: null,
-        },
-      ]
+  const isMaster = usuario.is_master
 
   /* ── render ───────────────────────────────────────── */
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      {/* ── header + filtro master ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            {usuario?.is_master && <Crown className="w-6 h-6 text-amber-500" />}
-            Dashboard {usuario?.is_master ? 'Master' : ''}
+            {isMaster && <Crown className="w-6 h-6 text-amber-500" />}
+            {isMaster ? 'Dashboard Master' : 'Dashboard'}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {usuario?.is_master
+          <p className="text-slate-500 text-sm mt-1">
+            {isMaster
               ? 'Visão geral de todos os corretores'
-              : 'Sua visão geral de desempenho'}
+              : 'Suas comissões e propostas'}
           </p>
         </div>
 
-        {usuario?.is_master && (
-          <select
-            value={corretorFiltro}
-            onChange={(e) => setCorretorFiltro(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm"
-          >
-            <option value="todos">👥 Todos os Corretores</option>
-            {listaCorretores.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
+        {/* Dropdown corretor (master only) */}
+        {isMaster && (
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-slate-400" />
+            <select
+              value={corretorFiltro}
+              onChange={(e) => setCorretorFiltro(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="todos">Todos os Corretores</option>
+              {listaCorretores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 
-      {/* ── cards ── */}
-      <div className={`grid gap-4 ${usuario?.is_master ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
-        {cards.map((card) => (
-          <div
-            key={card.title}
-            className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition-shadow"
-          >
+      {/* ── Cards ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card: Corretores (master) ou Propostas totais (comum) */}
+        {isMaster ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-slate-500">{card.title}</span>
-              <div className={`${card.color} p-2 rounded-xl`}>
-                <card.icon className="w-4 h-4 text-white" />
+              <span className="text-sm text-slate-500">Corretores Ativos</span>
+              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                <Users className="w-5 h-5 text-purple-500" />
               </div>
             </div>
-            <div className="text-2xl font-bold text-slate-900">{card.value}</div>
-            {card.subtitle && (
-              <p className="text-xs text-slate-400 mt-1">{card.subtitle}</p>
-            )}
+            <p className="text-3xl font-bold text-slate-900">
+              {totalCorretores}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              Usuários cadastrados
+            </p>
           </div>
-        ))}
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-slate-500">Total Propostas</span>
+              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5 text-blue-500" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-slate-900">
+              {ultimasPropostas.length > 0
+                ? timeline.reduce((a, t) => a + t.qtd, 0)
+                : 0}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">Desde o início</p>
+          </div>
+        )}
+
+        {/* Card: Propostas do Mês */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-slate-500">Propostas do Mês</span>
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <FileText className="w-5 h-5 text-blue-500" />
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{propostasMes}</p>
+          <p className="text-xs text-slate-400 mt-1">
+            {isMaster ? 'Todos os corretores' : 'Neste mês'}
+          </p>
+        </div>
+
+        {/* Card: A Receber */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-slate-500">
+              A Receber em{' '}
+              {MESES_PT[new Date().getMonth() + 1 > 11 ? 0 : new Date().getMonth() + 1]}/
+              {new Date().getMonth() + 1 > 11
+                ? new Date().getFullYear() + 1
+                : new Date().getFullYear()}
+            </span>
+            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-purple-500" />
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-slate-900">
+            R$ {fmt(aReceberProxMes)}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Parcelas consórcio + comissões
+          </p>
+        </div>
+
+        {/* Card: Comissão do Ano */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-slate-500">Comissão do Ano</span>
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-green-500" />
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-slate-900">
+            R$ {fmt(comissaoAno)}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            {isMaster ? 'Total da equipe' : 'Acumulado no ano'}
+          </p>
+        </div>
       </div>
 
-      {/* ── ranking corretores (master only, visão "todos") ── */}
-      {usuario?.is_master && corretorFiltro === 'todos' && rankingCorretores.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      {/* ── Ranking de Corretores (master, visão todos) ── */}
+      {isMaster && corretorFiltro === 'todos' && rankingCorretores.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
           <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Crown className="w-5 h-5 text-amber-500" />
             Ranking de Corretores — {new Date().getFullYear()}
@@ -427,25 +479,29 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left py-2 px-3 text-slate-500 font-medium">#</th>
-                  <th className="text-left py-2 px-3 text-slate-500 font-medium">Corretor</th>
-                  <th className="text-center py-2 px-3 text-slate-500 font-medium">Propostas</th>
-                  <th className="text-right py-2 px-3 text-slate-500 font-medium">Comissão</th>
+                <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
+                  <th className="text-left py-3 px-2 w-12">#</th>
+                  <th className="text-left py-3 px-2">Corretor</th>
+                  <th className="text-center py-3 px-2">Propostas</th>
+                  <th className="text-right py-3 px-2">Comissão</th>
                 </tr>
               </thead>
               <tbody>
-                {rankingCorretores.map((c, i) => (
+                {rankingCorretores.map((c, idx) => (
                   <tr
                     key={c.usuario_id}
-                    className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                    className="border-b border-slate-50 hover:bg-slate-50 transition"
                   >
-                    <td className="py-3 px-3">
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
+                    <td className="py-3 px-2">
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                     </td>
-                    <td className="py-3 px-3 font-medium text-slate-900">{c.nome}</td>
-                    <td className="py-3 px-3 text-center text-slate-600">{c.propostas}</td>
-                    <td className="py-3 px-3 text-right font-semibold text-emerald-600">
+                    <td className="py-3 px-2 font-medium text-slate-900">
+                      {c.nome}
+                    </td>
+                    <td className="py-3 px-2 text-center text-slate-600">
+                      {c.propostas}
+                    </td>
+                    <td className="py-3 px-2 text-right font-bold text-green-600">
                       R$ {fmt(c.comissao)}
                     </td>
                   </tr>
@@ -456,82 +512,122 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── navegação mensal ── */}
-      {dadosMes && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
+      {/* ── Navegação mensal ── */}
+      {timeline.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => mesAnterior && setMesSelecionado(mesAnterior)}
-              disabled={!mesAnterior}
-              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors"
+              onClick={() => navegarMes('prev')}
+              disabled={idxMes <= 0}
+              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="text-center">
-              <h2 className="text-lg font-bold text-slate-900">{dadosMes.label}</h2>
-              <p className="text-xs text-slate-500">{dadosMes.qtd} propostas no mês</p>
+              <h3 className="text-lg font-bold text-slate-900">
+                {dadosMesSelecionado?.label || '—'}
+              </h3>
+              <p className="text-sm text-slate-400">
+                {dadosMesSelecionado?.qtd || 0} propostas no mês
+              </p>
             </div>
             <button
-              onClick={() => mesProximo && setMesSelecionado(mesProximo)}
-              disabled={!mesProximo}
-              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors"
+              onClick={() => navegarMes('next')}
+              disabled={idxMes >= timeline.length - 1}
+              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-blue-50 rounded-xl p-4 text-center">
-              <p className="text-xs text-blue-600 font-medium mb-1">Comissão Gerada</p>
-              <p className="text-xl font-bold text-blue-700">R$ {fmt(dadosMes.total)}</p>
+              <p className="text-xs text-blue-600 font-medium mb-1">
+                Comissão Gerada
+              </p>
+              <p className="text-xl font-bold text-blue-700">
+                R$ {fmt(dadosMesSelecionado?.total || 0)}
+              </p>
             </div>
-            <div className="bg-emerald-50 rounded-xl p-4 text-center">
-              <p className="text-xs text-emerald-600 font-medium mb-1">Recebido</p>
-              <p className="text-xl font-bold text-emerald-700">R$ {fmt(dadosMes.recebido)}</p>
+            <div className="bg-green-50 rounded-xl p-4 text-center">
+              <p className="text-xs text-green-600 font-medium mb-1">
+                Recebido
+              </p>
+              <p className="text-xl font-bold text-green-700">
+                R$ {fmt(dadosMesSelecionado?.recebido || 0)}
+              </p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-4 text-center">
-              <p className="text-xs text-slate-600 font-medium mb-1">Variação</p>
-              <div className="flex items-center justify-center gap-1">
-                {variacao >= 0 ? (
-                  <ArrowUpRight className="w-4 h-4 text-emerald-500" />
-                ) : (
-                  <ArrowDownRight className="w-4 h-4 text-red-500" />
-                )}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
+              <p className="text-xs text-slate-500 font-medium mb-1">
+                Variação
+              </p>
+              {variacao !== null ? (
                 <p
-                  className={`text-xl font-bold ${variacao >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                  className={`text-xl font-bold flex items-center justify-center gap-1 ${
+                    parseFloat(variacao) >= 0
+                      ? 'text-green-600'
+                      : 'text-red-500'
+                  }`}
                 >
-                  {variacao.toFixed(1)}%
+                  {parseFloat(variacao) >= 0 ? (
+                    <ArrowUpRight className="w-4 h-4" />
+                  ) : (
+                    <ArrowDownRight className="w-4 h-4" />
+                  )}
+                  {variacao}%
                 </p>
-              </div>
+              ) : (
+                <p className="text-xl font-bold text-slate-300">—</p>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── gráfico mensal ── */}
-      {ultimos12.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">📊 Comissão × Recebido (12 meses)</h2>
-          <div className="h-[300px]">
+      {/* ── Gráfico ── */}
+      {timeline.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-4">
+            📊 Evolução de Comissões
+          </h2>
+          <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={ultimos12} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <ComposedChart data={timeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tickFormatter={formatCurrencyShort} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                />
+                <YAxis
+                  tickFormatter={formatCurrencyShort}
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
-                  iconType="circle"
+                  wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
                 />
-                <Bar dataKey="total" name="Comissão Gerada" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={28} />
-                <Line
+                <Area
+                  type="monotone"
                   dataKey="recebido"
                   name="Recebido"
-                  stroke="#10b981"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: '#10b981' }}
-                  activeDot={{ r: 6 }}
+                  fill="#dcfce7"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                />
+                <Bar
+                  dataKey="total"
+                  name="Comissão Gerada"
+                  fill="#3b82f6"
+                  radius={[6, 6, 0, 0]}
+                  barSize={32}
+                />
+                <Line
                   type="monotone"
+                  dataKey="recebido"
+                  name="Recebido (linha)"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: '#22c55e' }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -539,46 +635,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── gráfico acumulado ── */}
-      {dadosAcumulados.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">📈 Evolução Acumulada</h2>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dadosAcumulados} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tickFormatter={formatCurrencyShort} tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
-                  iconType="circle"
-                />
-                <Area
-                  dataKey="Total Acumulado"
-                  fill="#3b82f620"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  type="monotone"
-                />
-                <Area
-                  dataKey="Recebido Acumulado"
-                  fill="#10b98120"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  type="monotone"
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* ── últimas propostas ── */}
+      {/* ── Últimas propostas ── */}
       {ultimasPropostas.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-slate-900">📋 Últimas Propostas</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              📋 Últimas Propostas
+            </h2>
             <Link
               href="/propostas"
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
@@ -589,34 +652,38 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left py-2 px-3 text-slate-500 font-medium">Nº</th>
-                  <th className="text-left py-2 px-3 text-slate-500 font-medium">Cliente</th>
-                  <th className="text-left py-2 px-3 text-slate-500 font-medium">Data</th>
-                  <th className="text-right py-2 px-3 text-slate-500 font-medium">Valor</th>
-                  <th className="text-right py-2 px-3 text-slate-500 font-medium">Comissão</th>
+                <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
+                  <th className="text-left py-3 px-2">Nº</th>
+                  <th className="text-left py-3 px-2">Cliente</th>
+                  <th className="text-left py-3 px-2">Tipo</th>
+                  <th className="text-right py-3 px-2">Valor</th>
+                  <th className="text-right py-3 px-2">Comissão</th>
+                  <th className="text-right py-3 px-2">Data</th>
                 </tr>
               </thead>
               <tbody>
                 {ultimasPropostas.map((p) => (
                   <tr
                     key={p.id}
-                    className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                    className="border-b border-slate-50 hover:bg-slate-50 transition"
                   >
-                    <td className="py-3 px-3 font-medium text-slate-900">
-                      {p.numero_proposta || '—'}
+                    <td className="py-3 px-2 font-medium text-slate-900">
+                      {p.numero_proposta}
                     </td>
-                    <td className="py-3 px-3 text-slate-600">{p.nome_cliente || '—'}</td>
-                    <td className="py-3 px-3 text-slate-500">
-                      {p.data_proposta
-                        ? new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')
-                        : '—'}
+                    <td className="py-3 px-2 text-slate-700">
+                      {p.nome_cliente}
                     </td>
-                    <td className="py-3 px-3 text-right text-slate-600">
+                    <td className="py-3 px-2 text-slate-500">
+                      {p.tipo_proposta_codigo}
+                    </td>
+                    <td className="py-3 px-2 text-right text-slate-700">
                       R$ {fmt(p.valor_contratado || 0)}
                     </td>
-                    <td className="py-3 px-3 text-right font-semibold text-emerald-600">
+                    <td className="py-3 px-2 text-right font-bold text-green-600">
                       R$ {fmt(p.comissao_total || 0)}
+                    </td>
+                    <td className="py-3 px-2 text-right text-slate-400">
+                      {new Date(p.data_proposta).toLocaleDateString('pt-BR')}
                     </td>
                   </tr>
                 ))}
