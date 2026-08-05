@@ -11,11 +11,10 @@ import {
   TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
+  DollarSign,
 } from 'lucide-react'
 import {
-  BarChart,
   Bar,
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -56,7 +55,6 @@ const formatCurrencyShort = (value: number) => {
   return `R$ ${value.toFixed(0)}`
 }
 
-// Tooltip customizado
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
@@ -65,10 +63,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       {payload.map((entry: any, idx: number) => (
         <div key={idx} className="flex items-center justify-between gap-4 py-1">
           <div className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
             <span className="text-xs text-slate-600">{entry.name}</span>
           </div>
           <span className="text-xs font-bold text-slate-900">
@@ -83,6 +78,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardPage() {
   const [propostasMes, setPropostasMes] = useState(0)
   const [comissaoMes, setComissaoMes] = useState(0)
+  const [aReceberProxMes, setAReceberProxMes] = useState(0)
   const [comissaoAno, setComissaoAno] = useState(0)
   const [ultimasPropostas, setUltimasPropostas] = useState<any[]>([])
   const [timeline, setTimeline] = useState<ParcelaAgrupada[]>([])
@@ -99,6 +95,8 @@ export default function DashboardPage() {
       const now = new Date()
       const anoAtual = now.getFullYear()
       const mesAtual = now.getMonth()
+      const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
+      const proxMesStr = addMeses(mesAtualStr, 1)
 
       const { data: todas } = await supabase
         .from('propostas')
@@ -108,6 +106,7 @@ export default function DashboardPage() {
       if (todas) {
         setUltimasPropostas(todas.slice(0, 5))
 
+        // Propostas do mês atual
         const doMes = todas.filter((p) => {
           const d = new Date(p.data_proposta)
           return d.getMonth() === mesAtual && d.getFullYear() === anoAtual
@@ -115,15 +114,19 @@ export default function DashboardPage() {
         setPropostasMes(doMes.length)
         setComissaoMes(doMes.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
+        // Comissão do ano
         const doAno = todas.filter((p) => {
           const d = new Date(p.data_proposta)
           return d.getFullYear() === anoAtual
         })
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
-        // Timeline
+        // ============================================
+        // TIMELINE + CÁLCULO "A RECEBER PRÓX. MÊS"
+        // ============================================
         const mapa: Record<string, ParcelaAgrupada> = {}
 
+        // 1) Total gerado por mês
         for (const p of todas) {
           const mes = (p.data_proposta as string).slice(0, 7)
           if (!mapa[mes]) {
@@ -133,33 +136,39 @@ export default function DashboardPage() {
           mapa[mes].qtd += 1
         }
 
+        // 2) Recebido por mês (consórcio 5 parcelas, outros 1 mês depois)
         for (const p of todas) {
           const mesBase = (p.data_proposta as string).slice(0, 7)
           const valor = p.comissao_total || 0
           const tipo = p.tipo_proposta_codigo?.toLowerCase() || ''
 
           if (tipo.includes('consorcio') || tipo.includes('consórcio')) {
+            // Consórcio: divide em 5 parcelas, mês+1 até mês+5
             const parcelaMensal = valor / 5
             for (let i = 1; i <= 5; i++) {
-              const mesRecebimento = addMeses(mesBase, i)
-              if (!mapa[mesRecebimento]) {
-                mapa[mesRecebimento] = { mes: mesRecebimento, label: mesLabel(mesRecebimento), total: 0, recebido: 0, qtd: 0 }
+              const mesReceb = addMeses(mesBase, i)
+              if (!mapa[mesReceb]) {
+                mapa[mesReceb] = { mes: mesReceb, label: mesLabel(mesReceb), total: 0, recebido: 0, qtd: 0 }
               }
-              mapa[mesRecebimento].recebido += parcelaMensal
+              mapa[mesReceb].recebido += parcelaMensal
             }
           } else {
-            const mesRecebimento = addMeses(mesBase, 1)
-            if (!mapa[mesRecebimento]) {
-              mapa[mesRecebimento] = { mes: mesRecebimento, label: mesLabel(mesRecebimento), total: 0, recebido: 0, qtd: 0 }
+            // Outros produtos: comissão inteira no mês seguinte
+            const mesReceb = addMeses(mesBase, 1)
+            if (!mapa[mesReceb]) {
+              mapa[mesReceb] = { mes: mesReceb, label: mesLabel(mesReceb), total: 0, recebido: 0, qtd: 0 }
             }
-            mapa[mesRecebimento].recebido += valor
+            mapa[mesReceb].recebido += valor
           }
         }
 
         const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
         setTimeline(lista)
 
-        const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
+        // "A Receber Próx. Mês" = campo recebido do mês seguinte ao atual
+        const dadosProxMes = lista.find((m) => m.mes === proxMesStr)
+        setAReceberProxMes(dadosProxMes?.recebido || 0)
+
         setMesSelecionado(
           lista.find((m) => m.mes === mesAtualStr)?.mes || lista[lista.length - 1]?.mes || null
         )
@@ -178,11 +187,12 @@ export default function DashboardPage() {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
-  // Dados para o gráfico (últimos 12 meses)
-  const now = new Date()
-  const mesAtualStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const now2 = new Date()
+  const mesAtualStr2 = `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`
+  const proxMesLabel = mesLabel(addMeses(mesAtualStr2, 1))
+
   const ultimos12 = timeline
-    .filter((m) => m.mes <= mesAtualStr)
+    .filter((m) => m.mes <= mesAtualStr2)
     .slice(-12)
     .map((m) => ({
       ...m,
@@ -190,7 +200,6 @@ export default function DashboardPage() {
       recebidoFormatado: m.recebido,
     }))
 
-  // Acumulado
   let acumuladoTotal = 0
   let acumuladoRecebido = 0
   const dadosAcumulados = ultimos12.map((m) => {
@@ -203,7 +212,6 @@ export default function DashboardPage() {
     }
   })
 
-  // Variação mês a mês
   const variacao = dadosMes && idxAtual > 0
     ? ((dadosMes.total - timeline[idxAtual - 1].total) / (timeline[idxAtual - 1].total || 1)) * 100
     : 0
@@ -217,9 +225,34 @@ export default function DashboardPage() {
   }
 
   const cards = [
-    { title: 'Propostas do Mês', value: propostasMes, icon: FileText, color: 'bg-blue-500' },
-    { title: 'Comissões do Mês', value: `R$ ${fmt(comissaoMes)}`, icon: Calendar, color: 'bg-amber-500' },
-    { title: 'Comissão do Ano', value: `R$ ${fmt(comissaoAno)}`, icon: TrendingUp, color: 'bg-emerald-500' },
+    {
+      title: 'Propostas do Mês',
+      value: propostasMes,
+      icon: FileText,
+      color: 'bg-blue-500',
+      subtitle: null,
+    },
+    {
+      title: 'Comissões do Mês',
+      value: `R$ ${fmt(comissaoMes)}`,
+      icon: Calendar,
+      color: 'bg-amber-500',
+      subtitle: null,
+    },
+    {
+      title: `A Receber em ${proxMesLabel}`,
+      value: `R$ ${fmt(aReceberProxMes)}`,
+      icon: DollarSign,
+      color: 'bg-violet-500',
+      subtitle: 'Parcelas consórcio + comissões do mês',
+    },
+    {
+      title: 'Comissão do Ano',
+      value: `R$ ${fmt(comissaoAno)}`,
+      icon: TrendingUp,
+      color: 'bg-emerald-500',
+      subtitle: null,
+    },
   ]
 
   return (
@@ -230,8 +263,8 @@ export default function DashboardPage() {
           <p className="text-sm sm:text-base text-slate-600">Visão geral do sistema</p>
         </div>
 
-        {/* Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        {/* Cards — agora 4 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {cards.map((card) => {
             const Icon = card.icon
             return (
@@ -243,6 +276,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1">{card.value}</div>
                 <div className="text-slate-600 text-xs sm:text-sm font-medium">{card.title}</div>
+                {card.subtitle && (
+                  <div className="text-slate-400 text-[10px] sm:text-xs mt-1">{card.subtitle}</div>
+                )}
               </div>
             )
           })}
@@ -298,33 +334,10 @@ export default function DashboardPage() {
                     tickFormatter={formatCurrencyShort}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
-                    iconType="circle"
-                  />
-                  <Bar
-                    dataKey="total"
-                    name="Total Gerado"
-                    fill="#3b82f6"
-                    radius={[6, 6, 0, 0]}
-                    barSize={28}
-                  />
-                  <Bar
-                    dataKey="recebido"
-                    name="Recebido"
-                    fill="#10b981"
-                    radius={[6, 6, 0, 0]}
-                    barSize={28}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    name="Tendência Gerado"
-                    stroke="#1d4ed8"
-                    strokeWidth={2}
-                    dot={false}
-                    strokeDasharray="5 5"
-                  />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} iconType="circle" />
+                  <Bar dataKey="total" name="Total Gerado" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={28} />
+                  <Bar dataKey="recebido" name="Recebido" fill="#10b981" radius={[6, 6, 0, 0]} barSize={28} />
+                  <Line type="monotone" dataKey="total" name="Tendência Gerado" stroke="#1d4ed8" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -335,49 +348,20 @@ export default function DashboardPage() {
         {dadosAcumulados.length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 mb-6 sm:mb-8">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
-              <h2 className="text-base sm:text-lg font-semibold text-slate-900">
-                📈 Acumulado no Ano
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Gerado vs Recebido acumulado
-              </p>
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">📈 Acumulado no Ano</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Gerado vs Recebido acumulado</p>
             </div>
 
             <div className="p-4 sm:p-6">
               <ResponsiveContainer width="100%" height={280}>
                 <ComposedChart data={dadosAcumulados} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: '#64748b' }}
-                    axisLine={{ stroke: '#e2e8f0' }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={formatCurrencyShort}
-                  />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={formatCurrencyShort} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
-                    iconType="circle"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="Total Acumulado"
-                    fill="#dbeafe"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="Recebido Acumulado"
-                    fill="#d1fae5"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                  />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} iconType="circle" />
+                  <Area type="monotone" dataKey="Total Acumulado" fill="#dbeafe" stroke="#3b82f6" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Recebido Acumulado" fill="#d1fae5" stroke="#10b981" strokeWidth={2} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -394,24 +378,17 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Barra de meses */}
             <div className="flex items-center gap-2 px-4 sm:px-6 py-3 border-b border-slate-100 overflow-x-auto">
               {timeline.map((m) => {
                 const isAtual = m.mes === mesSelecionado
-                const isHoje = m.mes === mesAtualStr
+                const isHoje = m.mes === mesAtualStr2
                 return (
                   <button
                     key={m.mes}
                     onClick={() => setMesSelecionado(m.mes)}
                     className={`
                       flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap
-                      ${
-                        isAtual
-                          ? 'bg-blue-600 text-white'
-                          : isHoje
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                      }
+                      ${isAtual ? 'bg-blue-600 text-white' : isHoje ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}
                     `}
                   >
                     {m.label}
@@ -420,7 +397,6 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* Resumo do mês */}
             {dadosMes && (
               <div className="p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -431,9 +407,7 @@ export default function DashboardPage() {
                   >
                     <ChevronLeft className="w-5 h-5 text-slate-600" />
                   </button>
-
                   <h3 className="text-lg sm:text-xl font-bold text-slate-900">{dadosMes.label}</h3>
-
                   <button
                     onClick={() => mesProximo && setMesSelecionado(mesProximo)}
                     disabled={!mesProximo}
@@ -446,25 +420,19 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
                     <div className="text-xs font-medium text-blue-600 mb-1">Total Gerado</div>
-                    <div className="text-xl sm:text-2xl font-bold text-blue-900">
-                      R$ {fmt(dadosMes.total)}
-                    </div>
+                    <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
                     <div className="text-xs text-blue-500 mt-1">{dadosMes.qtd} proposta(s)</div>
                   </div>
 
                   <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
                     <div className="text-xs font-medium text-emerald-600 mb-1">Recebido</div>
-                    <div className="text-xl sm:text-2xl font-bold text-emerald-900">
-                      R$ {fmt(dadosMes.recebido)}
-                    </div>
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-900">R$ {fmt(dadosMes.recebido)}</div>
                     <div className="text-xs text-emerald-500 mt-1">Consórcio 5x + outros 1x</div>
                   </div>
 
                   <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                     <div className="text-xs font-medium text-amber-600 mb-1">Diferença</div>
-                    <div className="text-xl sm:text-2xl font-bold text-amber-900">
-                      R$ {fmt(dadosMes.total - dadosMes.recebido)}
-                    </div>
+                    <div className="text-xl sm:text-2xl font-bold text-amber-900">R$ {fmt(dadosMes.total - dadosMes.recebido)}</div>
                     <div className="text-xs text-amber-500 mt-1">Gerado − Recebido</div>
                   </div>
                 </div>
@@ -478,10 +446,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="text-base sm:text-lg font-semibold text-slate-900">📋 Últimas Propostas</h2>
-              <Link
-                href="/propostas"
-                className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
+              <Link href="/propostas" className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium">
                 Ver todas →
               </Link>
             </div>
@@ -503,9 +468,7 @@ export default function DashboardPage() {
                     <div className="text-sm font-medium text-slate-900 truncate">{p.nome_cliente}</div>
                   </div>
                   <div className="text-right ml-4 flex-shrink-0">
-                    <div className="text-sm font-bold text-slate-900">
-                      R$ {fmt(p.comissao_total || 0)}
-                    </div>
+                    <div className="text-sm font-bold text-slate-900">R$ {fmt(p.comissao_total || 0)}</div>
                     <div className="text-xs text-slate-500">
                       {new Date(p.data_proposta).toLocaleDateString('pt-BR')}
                     </div>
