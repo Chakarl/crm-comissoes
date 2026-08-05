@@ -15,7 +15,7 @@ interface Cliente {
   telefone: string | null
   agencia: string | null
   conta: string | null
-  created_at: string
+  created_at: string | null
 }
 
 const emptyForm = { nome: '', cpf: '', telefone: '', agencia: '', conta: '' }
@@ -39,7 +39,7 @@ export default function ClientesPage() {
   const loadClientes = async () => {
     const { data } = await supabase
       .from('clientes')
-      .select('id, nome, cpf, telefone, agencia, conta, created_at')
+      .select('*')
       .order('nome', { ascending: true })
     if (data) setClientes(data)
     setLoading(false)
@@ -90,7 +90,12 @@ export default function ClientesPage() {
     setDeletando(null)
   }
 
-  // Filtro por mês (usa created_at) + busca
+  // Extrai datas para o FiltroMes (converte timestamp → YYYY-MM-DD)
+  const datasDisponiveis = clientes
+    .map((c) => c.created_at ? c.created_at.slice(0, 10) : '')
+    .filter(Boolean)
+
+  // Filtro por mês + busca
   const filtered = clientes.filter((c) => {
     const matchMes = !mesFiltro || c.created_at?.startsWith(mesFiltro)
     const matchSearch =
@@ -151,10 +156,10 @@ export default function ClientesPage() {
         <FiltroMes
           mesSelecionado={mesFiltro}
           onSelecionar={setMesFiltro}
-          datasDisponiveis={clientes.map((c) => c.created_at)}
+          datasDisponiveis={datasDisponiveis}
         />
 
-        {/* Desktop Table */}
+        {/* Desktop */}
         <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -163,7 +168,6 @@ export default function ClientesPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">CPF</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Telefone</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Agência/Conta</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Cadastro</th>
                 <th className="text-right px-6 py-4 text-sm font-semibold text-slate-700">Ações</th>
               </tr>
             </thead>
@@ -175,9 +179,6 @@ export default function ClientesPage() {
                   <td className="px-6 py-4 text-slate-700">{cliente.telefone || '-'}</td>
                   <td className="px-6 py-4 text-slate-700">
                     {cliente.agencia && cliente.conta ? `${cliente.agencia}/${cliente.conta}` : '-'}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 text-sm">
-                    {new Date(cliente.created_at).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
@@ -217,7 +218,7 @@ export default function ClientesPage() {
           )}
         </div>
 
-        {/* Mobile Cards */}
+        {/* Mobile */}
         <div className="lg:hidden space-y-4">
           {fatia.map((cliente) => (
             <div key={cliente.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -226,42 +227,39 @@ export default function ClientesPage() {
                   <p className="font-semibold text-slate-900 text-sm">{cliente.nome}</p>
                   <p className="text-slate-600 text-xs">{cliente.cpf || 'CPF não informado'}</p>
                 </div>
-                <p className="text-slate-400 text-xs">
-                  {new Date(cliente.created_at).toLocaleDateString('pt-BR')}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                <div>
-                  <p className="text-slate-500 text-xs">Telefone</p>
-                  <p className="font-medium text-slate-900">{cliente.telefone || '-'}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => abrirEditar(cliente)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Excluir "${cliente.nome}"?`)) handleDelete(cliente.id)
+                    }}
+                    disabled={deletando === cliente.id}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deletando === cliente.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
-                <div>
-                  <p className="text-slate-500 text-xs">Agência/Conta</p>
-                  <p className="font-medium text-slate-900">
+              </div>
+              <div className="space-y-1.5 text-xs sm:text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Telefone:</span>
+                  <span className="text-slate-700">{cliente.telefone || '-'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Agência/Conta:</span>
+                  <span className="text-slate-700">
                     {cliente.agencia && cliente.conta ? `${cliente.agencia}/${cliente.conta}` : '-'}
-                  </p>
+                  </span>
                 </div>
-              </div>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-                <button
-                  onClick={() => abrirEditar(cliente)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`Excluir "${cliente.nome}"?`)) handleDelete(cliente.id)
-                  }}
-                  disabled={deletando === cliente.id}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {deletando === cliente.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                </button>
               </div>
             </div>
           ))}
@@ -284,50 +282,48 @@ export default function ClientesPage() {
         />
       </div>
 
-      {/* Modal Criar/Editar */}
+      {/* MODAL */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">
-                {editando ? 'Editar Cliente' : 'Novo Cliente'}
-              </h2>
-              <button onClick={fecharModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
+            <button onClick={fecharModal} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-6">
+              {editando ? 'Editar Cliente' : 'Novo Cliente'}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
                 <input
-                  required
                   type="text"
+                  required
                   value={formData.nome}
                   onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">CPF</label>
-                  <input
-                    type="text"
-                    value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-                  <input
-                    type="text"
-                    value={formData.telefone}
-                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">CPF</label>
+                <input
+                  type="text"
+                  value={formData.cpf}
+                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+                <input
+                  type="text"
+                  value={formData.telefone}
+                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -337,7 +333,7 @@ export default function ClientesPage() {
                     type="text"
                     value={formData.agencia}
                     onChange={(e) => setFormData({ ...formData, agencia: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                   />
                 </div>
                 <div>
@@ -346,26 +342,26 @@ export default function ClientesPage() {
                     type="text"
                     value={formData.conta}
                     onChange={(e) => setFormData({ ...formData, conta: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button
                   type="button"
                   onClick={fecharModal}
-                  className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-sm sm:text-base"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editando ? 'Salvar' : 'Cadastrar'}
+                  {editando ? 'Salvar Alterações' : 'Cadastrar'}
                 </button>
               </div>
             </form>
