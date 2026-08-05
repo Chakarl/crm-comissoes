@@ -118,14 +118,12 @@ export default function DashboardPage() {
 
       if (usuario.is_master) {
         const { data: usuarios } = await supabase
-          .from('usuarios')
-          .select('id, nome, is_master')
-          .order('nome')
+          .rpc('listar_todos_usuarios')
 
         if (usuarios) {
           todosUsuariosLocal = usuarios
-          const corretores = usuarios.filter((u) => !u.is_master)
-          setListaCorretores(corretores.map((u) => ({ id: u.id, nome: u.nome || 'Sem nome' })))
+          const corretores = usuarios.filter((u: any) => !u.is_master)
+          setListaCorretores(corretores.map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' })))
           setTotalCorretores(corretores.length)
         }
       }
