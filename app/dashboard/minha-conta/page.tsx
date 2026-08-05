@@ -50,31 +50,38 @@ export default function MinhaContaPage() {
   }, [])
 
   const loadUsuario = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    console.log('🔵 AUTH USER:', user)
 
-      const { data } = await supabase
-        .from('usuarios')
-        .select('id, nome, email, telefone, endereco, is_master')
-        .eq('id', user.id)
-        .single()
-
-      if (data) {
-        setUsuario(data)
-        setNome(data.nome || '')
-        setTelefone(data.telefone || '')
-        setEndereco(data.endereco || '')
-      }
-    } catch (err) {
-      console.error('Erro ao carregar perfil:', err)
-    } finally {
-      setLoading(false)
+    if (!user) {
+      console.log('🔴 Nenhum usuário logado')
+      return
     }
-  }
 
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id, nome, email, telefone, endereco, is_master')
+      .eq('id', user.id)
+      .single()
+
+    console.log('🟢 DADOS TABELA:', data)
+    console.log('🔴 ERRO TABELA:', error)
+
+    if (data) {
+      setUsuario(data)
+      setNome(data.nome || '')
+      setTelefone(data.telefone || '')
+      setEndereco(data.endereco || '')
+    }
+  } catch (err) {
+    console.error('Erro ao carregar perfil:', err)
+  } finally {
+    setLoading(false)
+  }
+}
   /* ── Salvar dados pessoais ── */
   const handleSalvarPerfil = async (e: React.FormEvent) => {
     e.preventDefault()
