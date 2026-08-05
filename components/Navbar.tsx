@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   X,
+  UserCog,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -64,9 +65,20 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
             </div>
           </div>
 
-          {/* User + logout desktop */}
-          <div className="hidden lg:flex items-center gap-4">
+          {/* User + Minha Conta + logout desktop */}
+          <div className="hidden lg:flex items-center gap-3">
             <span className="text-slate-400 text-sm">{userName}</span>
+            <Link
+              href="/minha-conta"
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                ${pathname === '/minha-conta'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+            >
+              <UserCog className="w-4 h-4" />
+              Minha Conta
+            </Link>
             <button
               onClick={onLogout}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
@@ -107,8 +119,22 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
                 </Link>
               )
             })}
-            <div className="border-t border-slate-700 mt-2 pt-3 flex flex-col gap-3 px-4">
+
+            {/* Separador + Minha Conta + Sair (mobile) */}
+            <div className="border-t border-slate-700 mt-2 pt-3 flex flex-col gap-2 px-4">
               <span className="text-slate-400 text-sm">{userName}</span>
+              <Link
+                href="/minha-conta"
+                onClick={() => setMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors
+                  ${pathname === '/minha-conta'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+              >
+                <UserCog className="w-5 h-5" />
+                Minha Conta
+              </Link>
               <button
                 onClick={() => {
                   setMenuOpen(false)
