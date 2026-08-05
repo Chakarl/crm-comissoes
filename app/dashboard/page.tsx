@@ -115,7 +115,7 @@ export default function DashboardPage() {
         // Comissão do ano
         const doAno = todas.filter((p) => {
           const d = new Date(p.data_proposta)
-          return d.getFullYear() === anoAtual
+          return (p.data_proposta as string)?.startsWith(String(anoAtual))
         })
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
@@ -461,7 +461,7 @@ export default function DashboardPage() {
                   <div className="text-right ml-4 flex-shrink-0">
                     <div className="text-sm font-bold text-slate-900">R$ {fmt(p.comissao_total || 0)}</div>
                     <div className="text-xs text-slate-500">
-                      {new Date(p.data_proposta).toLocaleDateString('pt-BR')}
+                      {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
                     </div>
                   </div>
                 </div>
