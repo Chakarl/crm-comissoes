@@ -15,19 +15,23 @@ interface Cliente {
   telefone: string | null
   agencia: string | null
   conta: string | null
-  created_at: string | null
+}
+
+interface ClienteComData extends Cliente {
+  /** Maior data_proposta vinculada (YYYY-MM-DD) ou null */
+  ultimaProposta: string | null
 }
 
 const emptyForm = { nome: '', cpf: '', telefone: '', agencia: '', conta: '' }
 
 export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [clientes, setClientes] = useState<ClienteComData[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [pagina, setPagina] = useState(1)
   const [mesFiltro, setMesFiltro] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [editando, setEditando] = useState<Cliente | null>(null)
+  const [editando, setEditando] = useState<ClienteComData | null>(null)
   const [deletando, setDeletando] = useState<string | null>(null)
   const [formData, setFormData] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
@@ -37,11 +41,36 @@ export default function ClientesPage() {
   useEffect(() => { setPagina(1) }, [search, mesFiltro])
 
   const loadClientes = async () => {
-    const { data } = await supabase
+    // 1. Busca clientes
+    const { data: clientesData } = await supabase
       .from('clientes')
       .select('*')
       .order('nome', { ascending: true })
-    if (data) setClientes(data)
+
+    // 2. Busca propostas (só nome_cliente + data_proposta)
+    const { data: propostasData } = await supabase
+      .from('propostas')
+      .select('nome_cliente, data_proposta')
+
+    // 3. Monta mapa: nome_cliente → maior data_proposta
+    const mapaData: Record<string, string> = {}
+    if (propostasData) {
+      propostasData.forEach((p) => {
+        if (!p.nome_cliente || !p.data_proposta) return
+        const nome = p.nome_cliente.toLowerCase()
+        if (!mapaData[nome] || p.data_proposta > mapaData[nome]) {
+          mapaData[nome] = p.data_proposta
+        }
+      })
+    }
+
+    // 4. Junta
+    const resultado: ClienteComData[] = (clientesData || []).map((c) => ({
+      ...c,
+      ultimaProposta: mapaData[c.nome.toLowerCase()] || null,
+    }))
+
+    setClientes(resultado)
     setLoading(false)
   }
 
@@ -51,7 +80,7 @@ export default function ClientesPage() {
     setShowModal(true)
   }
 
-  const abrirEditar = (c: Cliente) => {
+  const abrirEditar = (c: ClienteComData) => {
     setEditando(c)
     setFormData({
       nome: c.nome || '',
@@ -90,14 +119,14 @@ export default function ClientesPage() {
     setDeletando(null)
   }
 
-  // Extrai datas para o FiltroMes (converte timestamp → YYYY-MM-DD)
+  // Datas para o componente FiltroMes (vindas das propostas)
   const datasDisponiveis = clientes
-    .map((c) => c.created_at ? c.created_at.slice(0, 10) : '')
+    .map((c) => c.ultimaProposta || '')
     .filter(Boolean)
 
   // Filtro por mês + busca
   const filtered = clientes.filter((c) => {
-    const matchMes = !mesFiltro || c.created_at?.startsWith(mesFiltro)
+    const matchMes = !mesFiltro || c.ultimaProposta?.startsWith(mesFiltro)
     const matchSearch =
       c.nome.toLowerCase().includes(search.toLowerCase()) ||
       c.cpf?.includes(search)
@@ -152,7 +181,7 @@ export default function ClientesPage() {
           </div>
         </div>
 
-        {/* Filtro por Mês */}
+        {/* Filtro por Mês (baseado na data das propostas) */}
         <FiltroMes
           mesSelecionado={mesFiltro}
           onSelecionar={setMesFiltro}
@@ -249,17 +278,9 @@ export default function ClientesPage() {
                   </button>
                 </div>
               </div>
-              <div className="space-y-1.5 text-xs sm:text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Telefone:</span>
-                  <span className="text-slate-700">{cliente.telefone || '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Agência/Conta:</span>
-                  <span className="text-slate-700">
-                    {cliente.agencia && cliente.conta ? `${cliente.agencia}/${cliente.conta}` : '-'}
-                  </span>
-                </div>
+              <div className="space-y-1 text-sm text-slate-600">
+                <p>📞 {cliente.telefone || '-'}</p>
+                <p>🏦 {cliente.agencia && cliente.conta ? `${cliente.agencia}/${cliente.conta}` : '-'}</p>
               </div>
             </div>
           ))}
@@ -280,94 +301,92 @@ export default function ClientesPage() {
           itensPorPagina={POR_PAGINA}
           onMudar={setPagina}
         />
-      </div>
 
-      {/* MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
-            <button onClick={fecharModal} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
-
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-6">
-              {editando ? 'Editar Cliente' : 'Novo Cliente'}
-            </h2>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-                />
+        {/* Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
+              <div className="flex items-center justify-between p-6 border-b border-slate-200">
+                <h2 className="text-lg font-bold text-slate-900">
+                  {editando ? 'Editar Cliente' : 'Novo Cliente'}
+                </h2>
+                <button onClick={fecharModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">CPF</label>
-                <input
-                  type="text"
-                  value={formData.cpf}
-                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-                <input
-                  type="text"
-                  value={formData.telefone}
-                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Agência</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
                   <input
                     type="text"
-                    value={formData.agencia}
-                    onChange={(e) => setFormData({ ...formData, agencia: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    required
+                    value={formData.nome}
+                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Conta</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">CPF</label>
                   <input
                     type="text"
-                    value={formData.conta}
-                    onChange={(e) => setFormData({ ...formData, conta: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    value={formData.cpf}
+                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+                  <input
+                    type="text"
+                    value={formData.telefone}
+                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Agência</label>
+                    <input
+                      type="text"
+                      value={formData.agencia}
+                      onChange={(e) => setFormData({ ...formData, agencia: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Conta</label>
+                    <input
+                      type="text"
+                      value={formData.conta}
+                      onChange={(e) => setFormData({ ...formData, conta: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={fecharModal}
-                  className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-sm sm:text-base"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
-                >
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editando ? 'Salvar Alterações' : 'Cadastrar'}
-                </button>
-              </div>
-            </form>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={fecharModal}
+                    className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {editando ? 'Salvar' : 'Cadastrar'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
