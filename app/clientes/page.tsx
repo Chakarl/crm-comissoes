@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Plus, Search, Users as UsersIcon, Pencil, Trash2, X, Loader2 } from 'lucide-react'
+import { useUsuario } from '@/hooks/useUsuario'
+import {
+  Plus,
+  Search,
+  Users as UsersIcon,
+  Pencil,
+  Trash2,
+  X,
+  Loader2,
+} from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
 
@@ -15,16 +24,17 @@ interface Cliente {
   telefone: string | null
   agencia: string | null
   conta: string | null
+  usuario_id: string | null
 }
 
 interface ClienteComData extends Cliente {
-  /** Maior data_proposta vinculada (YYYY-MM-DD) ou null */
   ultimaProposta: string | null
 }
 
 const emptyForm = { nome: '', cpf: '', telefone: '', agencia: '', conta: '' }
 
 export default function ClientesPage() {
+  const { usuario, loading: loadingUser } = useUsuario()
   const [clientes, setClientes] = useState<ClienteComData[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -37,22 +47,38 @@ export default function ClientesPage() {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  useEffect(() => { loadClientes() }, [])
-  useEffect(() => { setPagina(1) }, [search, mesFiltro])
+  useEffect(() => {
+    if (usuario) loadClientes()
+  }, [usuario])
+
+  useEffect(() => {
+    setPagina(1)
+  }, [search, mesFiltro])
 
   const loadClientes = async () => {
-    // 1. Busca clientes
-    const { data: clientesData } = await supabase
+    if (!usuario) return
+
+    let queryClientes = supabase
       .from('clientes')
       .select('*')
       .order('nome', { ascending: true })
 
-    // 2. Busca propostas (só nome_cliente + data_proposta)
-    const { data: propostasData } = await supabase
+    if (!usuario.is_master) {
+      queryClientes = queryClientes.eq('usuario_id', usuario.id)
+    }
+
+    const { data: clientesData } = await queryClientes
+
+    let queryPropostas = supabase
       .from('propostas')
       .select('nome_cliente, data_proposta')
 
-    // 3. Monta mapa: nome_cliente → maior data_proposta
+    if (!usuario.is_master) {
+      queryPropostas = queryPropostas.eq('usuario_id', usuario.id)
+    }
+
+    const { data: propostasData } = await queryPropostas
+
     const mapaData: Record<string, string> = {}
     if (propostasData) {
       propostasData.forEach((p) => {
@@ -64,7 +90,6 @@ export default function ClientesPage() {
       })
     }
 
-    // 4. Junta
     const resultado: ClienteComData[] = (clientesData || []).map((c) => ({
       ...c,
       ultimaProposta: mapaData[c.nome.toLowerCase()] || null,
@@ -100,14 +125,26 @@ export default function ClientesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!usuario) return
     setSaving(true)
 
     if (editando) {
-      const { error } = await supabase.from('clientes').update(formData).eq('id', editando.id)
-      if (!error) { fecharModal(); loadClientes() }
+      const { error } = await supabase
+        .from('clientes')
+        .update(formData)
+        .eq('id', editando.id)
+      if (!error) {
+        fecharModal()
+        loadClientes()
+      }
     } else {
-      const { error } = await supabase.from('clientes').insert([formData])
-      if (!error) { fecharModal(); loadClientes() }
+      const { error } = await supabase
+        .from('clientes')
+        .insert([{ ...formData, usuario_id: usuario.id }])
+      if (!error) {
+        fecharModal()
+        loadClientes()
+      }
     }
     setSaving(false)
   }
@@ -119,17 +156,16 @@ export default function ClientesPage() {
     setDeletando(null)
   }
 
-  // Datas para o componente FiltroMes (vindas das propostas)
   const datasDisponiveis = clientes
     .map((c) => c.ultimaProposta || '')
     .filter(Boolean)
 
-  // Filtro por mês + busca
   const filtered = clientes.filter((c) => {
-    const matchMes = !mesFiltro || c.ultimaProposta?.startsWith(mesFiltro)
+    const matchMes =
+      !mesFiltro || (c.ultimaProposta && c.ultimaProposta.startsWith(mesFiltro))
     const matchSearch =
-      c.nome.toLowerCase().includes(search.toLowerCase()) ||
-      c.cpf?.includes(search)
+      c.nome?.toLowerCase().includes(search.toLowerCase()) ||
+      c.cpf?.toLowerCase().includes(search.toLowerCase())
     return matchMes && matchSearch
   })
 
@@ -137,7 +173,7 @@ export default function ClientesPage() {
   const pag = Math.min(pagina, totalPaginas || 1)
   const fatia = filtered.slice((pag - 1) * POR_PAGINA, pag * POR_PAGINA)
 
-  if (loading) {
+  if (loadingUser || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-slate-600">Carregando clientes...</div>
@@ -148,11 +184,12 @@ export default function ClientesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
-
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Clientes</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">
+              Clientes
+            </h1>
             <p className="text-sm sm:text-base text-slate-600">
               {filtered.length} cliente{filtered.length !== 1 && 's'}
               {search && ` encontrado${filtered.length !== 1 ? 's' : ''}`}
@@ -181,52 +218,79 @@ export default function ClientesPage() {
           </div>
         </div>
 
-        {/* Filtro por Mês (baseado na data das propostas) */}
+        {/* Filtro por Mês */}
         <FiltroMes
           mesSelecionado={mesFiltro}
           onSelecionar={setMesFiltro}
           datasDisponiveis={datasDisponiveis}
         />
 
-        {/* Desktop */}
+        {/* Desktop Table */}
         <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Nome</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">CPF</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Telefone</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Agência/Conta</th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-slate-700">Ações</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Nome
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  CPF
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Telefone
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Agência / Conta
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Última Proposta
+                </th>
+                <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody>
-              {fatia.map((cliente) => (
-                <tr key={cliente.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-6 py-4 font-medium text-slate-900">{cliente.nome}</td>
-                  <td className="px-6 py-4 text-slate-700">{cliente.cpf || '-'}</td>
-                  <td className="px-6 py-4 text-slate-700">{cliente.telefone || '-'}</td>
+              {fatia.map((c) => (
+                <tr
+                  key={c.id}
+                  className="border-b border-slate-100 hover:bg-slate-50"
+                >
+                  <td className="px-6 py-4 font-medium text-slate-900">
+                    {c.nome}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">{c.cpf || '—'}</td>
                   <td className="px-6 py-4 text-slate-700">
-                    {cliente.agencia && cliente.conta ? `${cliente.agencia}/${cliente.conta}` : '-'}
+                    {c.telefone || '—'}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {c.agencia && c.conta
+                      ? `${c.agencia} / ${c.conta}`
+                      : c.agencia || c.conta || '—'}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {c.ultimaProposta
+                      ? new Date(
+                          c.ultimaProposta + 'T00:00:00'
+                        ).toLocaleDateString('pt-BR')
+                      : '—'}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <button
-                        onClick={() => abrirEditar(cliente)}
+                        onClick={() => abrirEditar(c)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Editar"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm(`Excluir "${cliente.nome}"?`)) handleDelete(cliente.id)
-                        }}
-                        disabled={deletando === cliente.id}
+                        onClick={() => handleDelete(c.id)}
+                        disabled={deletando === c.id}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Excluir"
                       >
-                        {deletando === cliente.id ? (
+                        {deletando === c.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <Trash2 className="w-4 h-4" />
@@ -247,30 +311,31 @@ export default function ClientesPage() {
           )}
         </div>
 
-        {/* Mobile */}
+        {/* Mobile Cards */}
         <div className="lg:hidden space-y-4">
-          {fatia.map((cliente) => (
-            <div key={cliente.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex items-start justify-between mb-3">
+          {fatia.map((c) => (
+            <div
+              key={c.id}
+              className="bg-white rounded-xl border border-slate-200 p-4"
+            >
+              <div className="flex items-start justify-between mb-2">
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">{cliente.nome}</p>
-                  <p className="text-slate-600 text-xs">{cliente.cpf || 'CPF não informado'}</p>
+                  <div className="font-semibold text-slate-900">{c.nome}</div>
+                  <div className="text-xs text-slate-500">{c.cpf || '—'}</div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <button
-                    onClick={() => abrirEditar(cliente)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    onClick={() => abrirEditar(c)}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => {
-                      if (confirm(`Excluir "${cliente.nome}"?`)) handleDelete(cliente.id)
-                    }}
-                    disabled={deletando === cliente.id}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    onClick={() => handleDelete(c.id)}
+                    disabled={deletando === c.id}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
                   >
-                    {deletando === cliente.id ? (
+                    {deletando === c.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Trash2 className="w-4 h-4" />
@@ -278,9 +343,13 @@ export default function ClientesPage() {
                   </button>
                 </div>
               </div>
-              <div className="space-y-1 text-sm text-slate-600">
-                <p>📞 {cliente.telefone || '-'}</p>
-                <p>🏦 {cliente.agencia && cliente.conta ? `${cliente.agencia}/${cliente.conta}` : '-'}</p>
+              <div className="text-sm text-slate-600">
+                {c.telefone || '—'} •{' '}
+                {c.ultimaProposta
+                  ? new Date(
+                      c.ultimaProposta + 'T00:00:00'
+                    ).toLocaleDateString('pt-BR')
+                  : 'Sem proposta'}
               </div>
             </div>
           ))}
@@ -294,92 +363,107 @@ export default function ClientesPage() {
         </div>
 
         {/* Paginação */}
-        <Paginacao
-          paginaAtual={pag}
-          totalPaginas={totalPaginas}
-          totalItens={filtered.length}
-          itensPorPagina={POR_PAGINA}
-          onMudar={setPagina}
-        />
+        <Paginacao pagina={pag} total={totalPaginas} onChange={setPagina} />
 
-        {/* Modal */}
+        {/* Modal Novo/Editar */}
         {showModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
-              <div className="flex items-center justify-between p-6 border-b border-slate-200">
-                <h2 className="text-lg font-bold text-slate-900">
+            <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h2 className="text-lg font-semibold text-slate-900">
                   {editando ? 'Editar Cliente' : 'Novo Cliente'}
                 </h2>
-                <button onClick={fecharModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                  <X className="w-5 h-5 text-slate-500" />
+                <button
+                  onClick={fecharModal}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Nome *</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Nome *
+                  </label>
                   <input
-                    type="text"
                     required
+                    type="text"
                     value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    onChange={(e) =>
+                      setFormData({ ...formData, nome: e.target.value })
+                    }
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">CPF</label>
+                  <label className="block text-sm font-medium mb-1">CPF</label>
                   <input
                     type="text"
                     value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    onChange={(e) =>
+                      setFormData({ ...formData, cpf: e.target.value })
+                    }
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Telefone
+                  </label>
                   <input
                     type="text"
                     value={formData.telefone}
-                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefone: e.target.value })
+                    }
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Agência</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Agência
+                    </label>
                     <input
                       type="text"
                       value={formData.agencia}
-                      onChange={(e) => setFormData({ ...formData, agencia: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      onChange={(e) =>
+                        setFormData({ ...formData, agencia: e.target.value })
+                      }
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Conta</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Conta
+                    </label>
                     <input
                       type="text"
                       value={formData.conta}
-                      onChange={(e) => setFormData({ ...formData, conta: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      onChange={(e) =>
+                        setFormData({ ...formData, conta: e.target.value })
+                      }
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={fecharModal}
-                    className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
-                  >
-                    Cancelar
-                  </button>
+                <div className="flex gap-3 pt-4">
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
                   >
                     {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                     {editando ? 'Salvar' : 'Cadastrar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fecharModal}
+                    className="px-6 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar
                   </button>
                 </div>
               </form>

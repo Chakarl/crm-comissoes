@@ -20,15 +20,36 @@ function getSupabase() {
   )
 }
 
-// GET /api/clientes?q=João
+async function getUsuario(supabase: any) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('id, is_master')
+    .eq('auth_id', user.id)
+    .maybeSingle()
+
+  return usuario
+}
+
 export async function GET(req: NextRequest) {
   const supabase = getSupabase()
+  const usuario = await getUsuario(supabase)
+
+  if (!usuario) {
+    return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q')?.trim()
 
   let query = supabase
     .from('clientes')
-    .select(`
+    .select(
+      `
       id,
       nome,
       cpf,
@@ -36,9 +57,15 @@ export async function GET(req: NextRequest) {
       agencia,
       conta,
       created_at,
+      usuario_id,
       propostas(count)
-    `)
+    `
+    )
     .order('nome', { ascending: true })
+
+  if (!usuario.is_master) {
+    query = query.eq('usuario_id', usuario.id)
+  }
 
   if (q) {
     query = query.or(`nome.ilike.%${q}%,cpf.ilike.%${q}%`)
@@ -50,11 +77,15 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data)
 }
 
-// POST /api/clientes
 export async function POST(req: NextRequest) {
   const supabase = getSupabase()
-  const body = await req.json()
+  const usuario = await getUsuario(supabase)
 
+  if (!usuario) {
+    return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+  }
+
+  const body = await req.json()
   const { nome, cpf, telefone, agencia, conta } = body
 
   if (!nome) {
@@ -75,7 +106,14 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('clientes')
-    .insert({ nome, cpf, telefone, agencia, conta })
+    .insert({
+      nome,
+      cpf,
+      telefone,
+      agencia,
+      conta,
+      usuario_id: usuario.id,
+    })
     .select()
     .single()
 

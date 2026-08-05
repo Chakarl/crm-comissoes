@@ -1,6 +1,8 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { useUsuario } from "@/hooks/useUsuario";
 import { calcularComissao } from "@/lib/calcularComissao";
 import { gerarParcelasConsorcio, gerarParcelaUnica } from "@/lib/gerarParcelas";
 import { useRouter } from "next/navigation";
@@ -64,6 +66,7 @@ function parseBRL(v: string): number {
 }
 
 export function PropostaForm() {
+  const { usuario, loading: loadingUser } = useUsuario();
   const router = useRouter();
   const [tipos, setTipos] = useState<TipoProposta[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,19 +112,23 @@ export function PropostaForm() {
       return;
     }
 
-    // CPF com máscara (formato do banco)
     const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
 
     const timeout = setTimeout(async () => {
       setBuscandoCpf(true);
       try {
-        // Busca nos dois formatos pra garantir
-        const { data } = await supabase
+        let query = supabase
           .from("clientes")
           .select("*")
           .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+
+        // Usuário não-master só encontra seus próprios clientes
+        if (usuario && !usuario.is_master) {
+          query = query.eq("usuario_id", usuario.id);
+        }
+
+        const { data } = await query.maybeSingle();
 
         if (data) {
           setClienteEncontrado(true);
@@ -147,13 +154,17 @@ export function PropostaForm() {
     }, 400);
 
     return () => clearTimeout(timeout);
-  }, [form.cpf_cliente]);
+  }, [form.cpf_cliente, usuario]);
 
   const precisaTaxa = !TIPOS_SEM_TAXA.includes(form.tipo_proposta_codigo);
   const precisaPrazo = !TIPOS_SEM_PRAZO.includes(form.tipo_proposta_codigo);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!usuario) {
+      setErro("Usuário não autenticado. Faça login novamente.");
+      return;
+    }
     setLoading(true);
     setErro(null);
     setResultado(null);
@@ -187,17 +198,17 @@ export function PropostaForm() {
           .from("clientes")
           .insert({
             nome: form.nome_cliente,
-            cpf: cpfMascara, // salva com máscara, igual ao padrão do banco
+            cpf: cpfMascara,
             telefone: form.telefone_cliente.replace(/\D/g, "") || null,
             agencia: form.agencia_cliente || null,
             conta: form.conta_cliente || null,
+            usuario_id: usuario.id,
           })
           .select("id")
           .single();
         if (errCli) throw errCli;
         idCliente = novoCli.id;
       } else if (idCliente) {
-        // Atualiza dados do cliente existente
         await supabase.from("clientes").update({
           nome: form.nome_cliente,
           telefone: form.telefone_cliente.replace(/\D/g, "") || null,
@@ -227,6 +238,7 @@ export function PropostaForm() {
           is_consorcio: calc.is_consorcio,
           cliente_id: idCliente,
           user_id: user.id,
+          usuario_id: usuario.id,
         })
         .select()
         .single();
@@ -295,6 +307,10 @@ export function PropostaForm() {
   }, {});
 
   const cpfCompleto = form.cpf_cliente.replace(/\D/g, "").length === 11;
+
+  if (loadingUser) {
+    return <p className="text-sm text-gray-500">Carregando usuário...</p>;
+  }
 
   return (
     <div className="flex justify-center">
@@ -365,7 +381,6 @@ export function PropostaForm() {
             </div>
           </div>
 
-          {/* Badge de status */}
           {cpfCompleto && !buscandoCpf && (
             <div className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
               clienteEncontrado

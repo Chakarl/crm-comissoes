@@ -1,7 +1,11 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { useUsuario } from '@/hooks/useUsuario'
+
+const supabase = createClient()
 
 type TipoProposta = { id: number; codigo: string; nome: string; categoria: string }
 type Proposta = {
@@ -25,12 +29,12 @@ type ParcelaConsorcio = {
 }
 
 export default function Home() {
+  const { usuario, loading: loadingUser } = useUsuario()
   const [tipos, setTipos] = useState<TipoProposta[]>([])
   const [propostas, setPropostas] = useState<Proposta[]>([])
   const [parcelas, setParcelas] = useState<ParcelaConsorcio[]>([])
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<'cadastro' | 'lista' | 'parcelas'>('cadastro')
-  const [usuarioAtual, setUsuarioAtual] = useState<any>(null)
   const router = useRouter()
 
   const [form, setForm] = useState({
@@ -43,20 +47,15 @@ export default function Home() {
     prazo_meses: '',
   })
 
-  const [resultado, setResultado] = useState<{pct: number; valor: number} | null>(null)
+  const [resultado, setResultado] = useState<{ pct: number; valor: number } | null>(null)
 
   useEffect(() => {
-    const user = localStorage.getItem('usuario')
-    if (!user) {
-      router.push('/login')
-      return
+    if (usuario) {
+      carregarTipos()
+      carregarPropostas()
+      carregarParcelas()
     }
-    
-    setUsuarioAtual(JSON.parse(user))
-    carregarTipos()
-    carregarPropostas()
-    carregarParcelas()
-  }, [])
+  }, [usuario])
 
   async function carregarTipos() {
     const { data } = await supabase.from('tipos_proposta').select('*').order('categoria')
@@ -64,19 +63,49 @@ export default function Home() {
   }
 
   async function carregarPropostas() {
-    const { data } = await supabase
+    if (!usuario) return
+
+    let query = supabase
       .from('propostas')
       .select('*, tipos_proposta(*)')
       .order('data_fechamento', { ascending: false })
+
+    if (!usuario.is_master) {
+      query = query.eq('usuario_id', usuario.id)
+    }
+
+    const { data } = await query
     if (data) setPropostas(data)
   }
 
   async function carregarParcelas() {
-    const { data } = await supabase
-      .from('parcelas_consorcio')
-      .select('*')
-      .order('mes_referencia')
-    if (data) setParcelas(data)
+    if (!usuario) return
+
+    if (usuario.is_master) {
+      const { data } = await supabase
+        .from('parcelas_consorcio')
+        .select('*')
+        .order('mes_referencia')
+      if (data) setParcelas(data)
+    } else {
+      // Busca IDs das propostas do usuário, depois filtra parcelas
+      const { data: minhasPropostas } = await supabase
+        .from('propostas')
+        .select('id')
+        .eq('usuario_id', usuario.id)
+
+      if (minhasPropostas && minhasPropostas.length > 0) {
+        const ids = minhasPropostas.map((p) => p.id)
+        const { data } = await supabase
+          .from('parcelas_consorcio')
+          .select('*')
+          .in('proposta_id', ids)
+          .order('mes_referencia')
+        if (data) setParcelas(data)
+      } else {
+        setParcelas([])
+      }
+    }
   }
 
   async function buscarComissao() {
@@ -116,7 +145,7 @@ export default function Home() {
   }
 
   async function salvarProposta() {
-    if (!resultado) {
+    if (!resultado || !usuario) {
       alert('Calcule a comissão antes de salvar.')
       return
     }
@@ -133,7 +162,7 @@ export default function Home() {
       prazo_meses: parseInt(form.prazo_meses) || null,
       comissao_pct: resultado.pct,
       comissao_valor: resultado.valor,
-      usuario_id: usuarioAtual?.id
+      usuario_id: usuario.id,
     }
 
     const { data, error } = await supabase.from('propostas').insert(proposta).select()
@@ -177,33 +206,22 @@ export default function Home() {
       mesInicio.setMonth(mesInicio.getMonth() + 1)
     }
 
-    const parcelas = []
+    const parcelasArr = []
     for (let i = 0; i < 5; i++) {
       const mesRef = new Date(mesInicio)
       mesRef.setMonth(mesRef.getMonth() + i)
-      parcelas.push({
+      parcelasArr.push({
         proposta_id: propostaId,
         mes_referencia: mesRef.toISOString().split('T')[0].slice(0, 7) + '-01',
         valor_parcela: Math.round(parcela * 100) / 100,
       })
     }
 
-    await supabase.from('parcelas_consorcio').insert(parcelas)
+    await supabase.from('parcelas_consorcio').insert(parcelasArr)
   }
 
   async function handleLogout() {
-    const token = localStorage.getItem('token')
-    
-    if (token) {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      })
-    }
-
-    localStorage.removeItem('token')
-    localStorage.removeItem('usuario')
+    await supabase.auth.signOut()
     router.push('/login')
   }
 
@@ -217,7 +235,7 @@ export default function Home() {
     return acc
   }, {} as Record<string, number>)
 
-  if (!usuarioAtual) {
+  if (loadingUser || !usuario) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <p className="text-white text-xl">Carregando...</p>
@@ -227,14 +245,14 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      {/* Header com Logout e Gerenciar Usuários */}
+      {/* Header */}
       <header className="bg-gray-900 p-4 sticky top-0 z-50 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">CRM Comissões</h1>
             <p className="text-sm text-gray-400">
-              Logado como: <span className="text-white">{usuarioAtual.nome}</span>
-              {usuarioAtual.is_master && (
+              Logado como: <span className="text-white">{usuario.is_master ? 'Administrador' : 'Usuário'}</span>
+              {usuario.is_master && (
                 <span className="ml-2 bg-yellow-600 px-2 py-0.5 rounded text-xs font-bold">
                   MASTER
                 </span>
@@ -243,7 +261,7 @@ export default function Home() {
           </div>
 
           <div className="flex gap-3">
-            {usuarioAtual.is_master && (
+            {usuario.is_master && (
               <button
                 onClick={() => router.push('/usuarios')}
                 className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium transition flex items-center gap-2"
