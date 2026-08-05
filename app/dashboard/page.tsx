@@ -2,18 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useUsuario } from '@/hooks/useUsuario'
 import Link from 'next/link'
 import {
   FileText,
+  Calendar,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
   ArrowUpRight,
   ArrowDownRight,
   DollarSign,
-  Users,
-  Crown,
 } from 'lucide-react'
 import {
   Bar,
@@ -28,8 +26,6 @@ import {
   Area,
 } from 'recharts'
 
-/* ── tipos ──────────────────────────────────────────── */
-
 interface ParcelaAgrupada {
   mes: string
   label: string
@@ -38,19 +34,7 @@ interface ParcelaAgrupada {
   qtd: number
 }
 
-interface CorretorResumo {
-  usuario_id: string
-  nome: string
-  propostas: number
-  comissao: number
-}
-
-/* ── helpers ────────────────────────────────────────── */
-
-const MESES_PT = [
-  'Jan','Fev','Mar','Abr','Mai','Jun',
-  'Jul','Ago','Set','Out','Nov','Dez',
-]
+const MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 function mesLabel(iso: string) {
   const [ano, m] = iso.split('-')
@@ -71,9 +55,6 @@ const formatCurrencyShort = (value: number) => {
   return `R$ ${value.toFixed(0)}`
 }
 
-const fmt = (v: number) =>
-  v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
-
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
@@ -82,10 +63,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       {payload.map((entry: any, idx: number) => (
         <div key={idx} className="flex items-center justify-between gap-4 py-1">
           <div className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
             <span className="text-xs text-slate-600">{entry.name}</span>
           </div>
           <span className="text-xs font-bold text-slate-900">
@@ -97,12 +75,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-/* ── componente principal ───────────────────────────── */
-
 export default function DashboardPage() {
-  const { usuario, loading: loadingUser } = useUsuario()
-  const supabase = createClient()
-
   const [propostasMes, setPropostasMes] = useState(0)
   const [aReceberProxMes, setAReceberProxMes] = useState(0)
   const [comissaoAno, setComissaoAno] = useState(0)
@@ -110,25 +83,13 @@ export default function DashboardPage() {
   const [timeline, setTimeline] = useState<ParcelaAgrupada[]>([])
   const [mesSelecionado, setMesSelecionado] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-
-  // Master-only
-  const [totalCorretores, setTotalCorretores] = useState(0)
-  const [rankingCorretores, setRankingCorretores] = useState<CorretorResumo[]>([])
-  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<
-    { id: string; nome: string }[]
-  >([])
+  const supabase = createClient()
 
   useEffect(() => {
-    if (!loadingUser && usuario) loadDashboard()
-  }, [loadingUser, usuario, corretorFiltro])
-
-  /* ── carrega tudo ─────────────────────────────────── */
+    loadDashboard()
+  }, [])
 
   const loadDashboard = async () => {
-    if (!usuario) return
-    setLoading(true)
-
     try {
       const now = new Date()
       const anoAtual = now.getFullYear()
@@ -136,158 +97,79 @@ export default function DashboardPage() {
       const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
       const proxMesStr = addMeses(mesAtualStr, 1)
 
-      /* ───────────────────────────────────────────────
-         MAPA DE TODOS OS USUÁRIOS (para resolver nomes)
-         + lista de corretores não-master (para dropdown)
-      ─────────────────────────────────────────────── */
-      let todosUsuarios: { id: string; nome: string; is_master: boolean }[] = []
-      let corretoresDropdown: { id: string; nome: string }[] = []
-
-      if (usuario.is_master) {
-        const { data: usuarios } = await supabase
-          .from('usuarios')
-          .select('id, nome, is_master')
-          .order('nome')
-
-        if (usuarios) {
-          todosUsuarios = usuarios
-
-          // Dropdown: só não-master
-          corretoresDropdown = usuarios
-            .filter((u) => !u.is_master)
-            .map((u) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
-
-          setListaCorretores(corretoresDropdown)
-          setTotalCorretores(corretoresDropdown.length)
-        }
-      }
-
-      /* ── propostas ── */
-      let query = supabase
+      const { data: todas } = await supabase
         .from('propostas')
-        .select(
-          'id, comissao_total, data_proposta, numero_proposta, nome_cliente, tipo_proposta_codigo, valor_contratado, usuario_id'
-        )
+        .select('id, comissao_total, data_proposta, numero_proposta, nome_cliente, tipo_proposta_codigo, valor_contratado')
         .order('data_proposta', { ascending: false })
-
-      if (!usuario.is_master) {
-        query = query.eq('usuario_id', usuario.id)
-      } else if (corretorFiltro !== 'todos') {
-        query = query.eq('usuario_id', corretorFiltro)
-      }
-
-      const { data: todas } = await query
 
       if (todas) {
         setUltimasPropostas(todas.slice(0, 5))
 
-        /* propostas do mês */
-        const doMes = todas.filter(
-          (p) => (p.data_proposta as string)?.slice(0, 7) === mesAtualStr
-        )
-        setPropostasMes(doMes.length)
+        // Propostas do mês atual
+        const doMes = todas.filter((p) => {
+        const mesProposta = (p.data_proposta as string)?.slice(0, 7)
+        return mesProposta === mesAtualStr
+        })
+        setPropostasMes(doMes.length) 
 
-        /* comissão do ano */
-        const doAno = todas.filter((p) =>
-          (p.data_proposta as string)?.startsWith(String(anoAtual))
-        )
-        setComissaoAno(
-          doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0)
-        )
+        // Comissão do ano
+        const doAno = todas.filter((p) => {
+          const d = new Date(p.data_proposta)
+          return (p.data_proposta as string)?.startsWith(String(anoAtual))
+        })
+        setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
-        /* ── ranking (master, visão "todos") ── */
-        if (usuario.is_master && corretorFiltro === 'todos') {
-          const mapaCorretores: Record<string, CorretorResumo> = {}
-          for (const p of todas) {
-            const uid = p.usuario_id
-            if (!mapaCorretores[uid]) {
-              // Busca nome no mapa completo (inclui masters)
-              const usr = todosUsuarios.find((u) => u.id === uid)
-              mapaCorretores[uid] = {
-                usuario_id: uid,
-                nome: usr?.nome || 'Desconhecido',
-                propostas: 0,
-                comissao: 0,
-              }
-            }
-            if (
-              (p.data_proposta as string)?.startsWith(String(anoAtual))
-            ) {
-              mapaCorretores[uid].propostas += 1
-              mapaCorretores[uid].comissao += p.comissao_total || 0
-            }
-          }
-          setRankingCorretores(
-            Object.values(mapaCorretores).sort(
-              (a, b) => b.comissao - a.comissao
-            )
-          )
-        }
-
-        /* ── timeline ── */
+        // ============================================
+        // TIMELINE + CÁLCULO "A RECEBER PRÓX. MÊS"
+        // ============================================
         const mapa: Record<string, ParcelaAgrupada> = {}
 
+        // 1) Total gerado por mês
         for (const p of todas) {
           const mes = (p.data_proposta as string).slice(0, 7)
-          if (!mapa[mes])
-            mapa[mes] = {
-              mes,
-              label: mesLabel(mes),
-              total: 0,
-              recebido: 0,
-              qtd: 0,
-            }
+          if (!mapa[mes]) {
+            mapa[mes] = { mes, label: mesLabel(mes), total: 0, recebido: 0, qtd: 0 }
+          }
           mapa[mes].total += p.comissao_total || 0
           mapa[mes].qtd += 1
         }
 
+        // 2) Recebido por mês (consórcio 5 parcelas, outros 1 mês depois)
         for (const p of todas) {
           const mesBase = (p.data_proposta as string).slice(0, 7)
           const valor = p.comissao_total || 0
           const tipo = p.tipo_proposta_codigo?.toLowerCase() || ''
 
-          if (
-            tipo.includes('consorcio') ||
-            tipo.includes('consórcio')
-          ) {
+          if (tipo.includes('consorcio') || tipo.includes('consórcio')) {
+            // Consórcio: divide em 5 parcelas, mês+1 até mês+5
             const parcelaMensal = valor / 5
             for (let i = 1; i <= 5; i++) {
               const mesReceb = addMeses(mesBase, i)
-              if (!mapa[mesReceb])
-                mapa[mesReceb] = {
-                  mes: mesReceb,
-                  label: mesLabel(mesReceb),
-                  total: 0,
-                  recebido: 0,
-                  qtd: 0,
-                }
+              if (!mapa[mesReceb]) {
+                mapa[mesReceb] = { mes: mesReceb, label: mesLabel(mesReceb), total: 0, recebido: 0, qtd: 0 }
+              }
               mapa[mesReceb].recebido += parcelaMensal
             }
           } else {
+            // Outros produtos: comissão inteira no mês seguinte
             const mesReceb = addMeses(mesBase, 1)
-            if (!mapa[mesReceb])
-              mapa[mesReceb] = {
-                mes: mesReceb,
-                label: mesLabel(mesReceb),
-                total: 0,
-                recebido: 0,
-                qtd: 0,
-              }
+            if (!mapa[mesReceb]) {
+              mapa[mesReceb] = { mes: mesReceb, label: mesLabel(mesReceb), total: 0, recebido: 0, qtd: 0 }
+            }
             mapa[mesReceb].recebido += valor
           }
         }
 
-        const lista = Object.values(mapa).sort((a, b) =>
-          a.mes.localeCompare(b.mes)
-        )
+        const lista = Object.values(mapa).sort((a, b) => a.mes.localeCompare(b.mes))
         setTimeline(lista)
 
+        // "A Receber Próx. Mês" = campo recebido do mês seguinte ao atual
         const dadosProxMes = lista.find((m) => m.mes === proxMesStr)
         setAReceberProxMes(dadosProxMes?.recebido || 0)
 
-        if (!mesSelecionado) {
-          setMesSelecionado(mesAtualStr)
-        }
+        setMesSelecionado(
+          lista.find((m) => m.mes === mesAtualStr)?.mes || lista[lista.length - 1]?.mes || null
+        )
       }
     } catch (err) {
       console.error('Erro ao carregar dashboard:', err)
@@ -296,402 +178,298 @@ export default function DashboardPage() {
     }
   }
 
-  /* ── navegação mensal ─────────────────────────────── */
+  const idxAtual = timeline.findIndex((m) => m.mes === mesSelecionado)
+  const mesAnterior = idxAtual > 0 ? timeline[idxAtual - 1].mes : null
+  const mesProximo = idxAtual < timeline.length - 1 ? timeline[idxAtual + 1].mes : null
+  const dadosMes = timeline.find((m) => m.mes === mesSelecionado)
 
-  const dadosMesSelecionado = timeline.find(
-    (t) => t.mes === mesSelecionado
-  )
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
 
-  const idxMes = timeline.findIndex((t) => t.mes === mesSelecionado)
+  const now2 = new Date()
+  const mesAtualStr2 = `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`
+  const proxMesLabel = mesLabel(addMeses(mesAtualStr2, 1))
 
-  const mesAnteriorData =
-    idxMes > 0 ? timeline[idxMes - 1] : null
+  const ultimos12 = timeline
+    .filter((m) => m.mes <= mesAtualStr2)
+    .slice(-12)
+    .map((m) => ({
+      ...m,
+      totalFormatado: m.total,
+      recebidoFormatado: m.recebido,
+    }))
 
-  const variacao =
-    dadosMesSelecionado && mesAnteriorData && mesAnteriorData.total > 0
-      ? (
-          ((dadosMesSelecionado.total - mesAnteriorData.total) /
-            mesAnteriorData.total) *
-          100
-        ).toFixed(1)
-      : null
+  let acumuladoTotal = 0
+  let acumuladoRecebido = 0
+  const dadosAcumulados = ultimos12.map((m) => {
+    acumuladoTotal += m.total
+    acumuladoRecebido += m.recebido
+    return {
+      label: m.label,
+      'Total Acumulado': acumuladoTotal,
+      'Recebido Acumulado': acumuladoRecebido,
+    }
+  })
 
-  const navegarMes = (dir: 'prev' | 'next') => {
-    if (dir === 'prev' && idxMes > 0)
-      setMesSelecionado(timeline[idxMes - 1].mes)
-    if (dir === 'next' && idxMes < timeline.length - 1)
-      setMesSelecionado(timeline[idxMes + 1].mes)
-  }
+  const variacao = dadosMes && idxAtual > 0
+    ? ((dadosMes.total - timeline[idxAtual - 1].total) / (timeline[idxAtual - 1].total || 1)) * 100
+    : 0
 
-  /* ── loading / sem usuário ────────────────────────── */
-
-  if (loadingUser || loading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-600">Carregando dashboard...</div>
       </div>
     )
   }
 
-  if (!usuario) {
-    return (
-      <div className="text-center py-12 text-slate-500">
-        Usuário não encontrado.
-      </div>
-    )
-  }
-
-  const isMaster = usuario.is_master
-
-  /* ── render ───────────────────────────────────────── */
+  const cards = [
+    {
+      title: 'Propostas do Mês',
+      value: propostasMes,
+      icon: FileText,
+      color: 'bg-blue-500',
+      subtitle: null,
+    },
+    {
+      title: `A Receber em ${proxMesLabel}`,
+      value: `R$ ${fmt(aReceberProxMes)}`,
+      icon: DollarSign,
+      color: 'bg-violet-500',
+      subtitle: 'Parcelas consórcio + comissões do mês',
+    },
+    {
+      title: 'Comissão do Ano',
+      value: `R$ ${fmt(comissaoAno)}`,
+      icon: TrendingUp,
+      color: 'bg-emerald-500',
+      subtitle: null,
+    },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            {isMaster && <Crown className="w-6 h-6 text-amber-500" />}
-            {isMaster ? 'Dashboard Master' : 'Dashboard'}
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            {isMaster
-              ? 'Visão geral de todos os corretores'
-              : 'Suas comissões e propostas'}
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Dashboard</h1>
+          <p className="text-sm sm:text-base text-slate-600">Visão geral do sistema</p>
         </div>
 
-        {/* Dropdown corretor (master only) */}
-        {isMaster && (
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-slate-400" />
-            <select
-              value={corretorFiltro}
-              onChange={(e) => setCorretorFiltro(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="todos">Todos os Corretores</option>
-              {listaCorretores.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+        {/* Cards — agora 4 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          {cards.map((card) => {
+            const Icon = card.icon
+            return (
+              <div key={card.title} className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200">
+                <div className="flex items-start justify-between mb-3 sm:mb-4">
+                  <div className={`${card.color} p-2.5 sm:p-3 rounded-lg`}>
+                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1">{card.value}</div>
+                <div className="text-slate-600 text-xs sm:text-sm font-medium">{card.title}</div>
+                {card.subtitle && (
+                  <div className="text-slate-400 text-[10px] sm:text-xs mt-1">{card.subtitle}</div>
+                )}
+              </div>
+            )
+          })}
+        </div>
 
-      {/* ── Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card: Corretores (master) ou Propostas totais (comum) */}
-        {isMaster ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-slate-500">Corretores Ativos</span>
-              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-                <Users className="w-5 h-5 text-purple-500" />
+        {/* Gráfico Evolução Mensal */}
+        {ultimos12.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 mb-6 sm:mb-8">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900">
+                    📊 Evolução Mensal
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    Total gerado × Recebido — últimos 12 meses
+                  </p>
+                </div>
+                {dadosMes && (
+                  <div className="hidden sm:flex items-center gap-2">
+                    {variacao >= 0 ? (
+                      <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4 text-red-500" />
+                    )}
+                    <span
+                      className={`text-sm font-semibold ${
+                        variacao >= 0 ? 'text-emerald-600' : 'text-red-600'
+                      }`}
+                    >
+                      {variacao >= 0 ? '+' : ''}
+                      {variacao.toFixed(1)}% vs mês anterior
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {totalCorretores}
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Usuários cadastrados
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-slate-500">Total Propostas</span>
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <FileText className="w-5 h-5 text-blue-500" />
-              </div>
+
+            <div className="p-4 sm:p-6">
+              <ResponsiveContainer width="100%" height={320}>
+                <ComposedChart data={ultimos12} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={formatCurrencyShort}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} iconType="circle" />
+                  <Bar dataKey="total" name="Total Gerado" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={28} />
+                  <Bar dataKey="recebido" name="Recebido" fill="#10b981" radius={[6, 6, 0, 0]} barSize={28} />
+                  <Line type="monotone" dataKey="total" name="Tendência Gerado" stroke="#1d4ed8" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {ultimasPropostas.length > 0
-                ? timeline.reduce((a, t) => a + t.qtd, 0)
-                : 0}
-            </p>
-            <p className="text-xs text-slate-400 mt-1">Desde o início</p>
           </div>
         )}
 
-        {/* Card: Propostas do Mês */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-slate-500">Propostas do Mês</span>
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <FileText className="w-5 h-5 text-blue-500" />
+        {/* Gráfico Acumulado */}
+        {dadosAcumulados.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 mb-6 sm:mb-8">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">📈 Acumulado no Ano</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Gerado vs Recebido acumulado</p>
+            </div>
+
+            <div className="p-4 sm:p-6">
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={dadosAcumulados} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={formatCurrencyShort} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} iconType="circle" />
+                  <Area type="monotone" dataKey="Total Acumulado" fill="#dbeafe" stroke="#3b82f6" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Recebido Acumulado" fill="#d1fae5" stroke="#10b981" strokeWidth={2} />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-900">{propostasMes}</p>
-          <p className="text-xs text-slate-400 mt-1">
-            {isMaster ? 'Todos os corretores' : 'Neste mês'}
-          </p>
-        </div>
+        )}
 
-        {/* Card: A Receber */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-slate-500">
-              A Receber em{' '}
-              {MESES_PT[new Date().getMonth() + 1 > 11 ? 0 : new Date().getMonth() + 1]}/
-              {new Date().getMonth() + 1 > 11
-                ? new Date().getFullYear() + 1
-                : new Date().getFullYear()}
-            </span>
-            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-purple-500" />
+        {/* Timeline Comissões */}
+        {timeline.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 mb-6 sm:mb-8">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">📅 Comissões por Mês</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Total gerado no mês • Recebido (consórcio 5x + outros 1x)
+              </p>
             </div>
-          </div>
-          <p className="text-3xl font-bold text-slate-900">
-            R$ {fmt(aReceberProxMes)}
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            Parcelas consórcio + comissões
-          </p>
-        </div>
 
-        {/* Card: Comissão do Ano */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-slate-500">Comissão do Ano</span>
-            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-green-500" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-slate-900">
-            R$ {fmt(comissaoAno)}
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            {isMaster ? 'Total da equipe' : 'Acumulado no ano'}
-          </p>
-        </div>
-      </div>
-
-      {/* ── Ranking de Corretores (master, visão todos) ── */}
-      {isMaster && corretorFiltro === 'todos' && rankingCorretores.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Crown className="w-5 h-5 text-amber-500" />
-            Ranking de Corretores — {new Date().getFullYear()}
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
-                  <th className="text-left py-3 px-2 w-12">#</th>
-                  <th className="text-left py-3 px-2">Corretor</th>
-                  <th className="text-center py-3 px-2">Propostas</th>
-                  <th className="text-right py-3 px-2">Comissão</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rankingCorretores.map((c, idx) => (
-                  <tr
-                    key={c.usuario_id}
-                    className="border-b border-slate-50 hover:bg-slate-50 transition"
+            <div className="flex items-center gap-2 px-4 sm:px-6 py-3 border-b border-slate-100 overflow-x-auto">
+              {timeline.map((m) => {
+                const isAtual = m.mes === mesSelecionado
+                const isHoje = m.mes === mesAtualStr2
+                return (
+                  <button
+                    key={m.mes}
+                    onClick={() => setMesSelecionado(m.mes)}
+                    className={`
+                      flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap
+                      ${isAtual ? 'bg-blue-600 text-white' : isHoje ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}
+                    `}
                   >
-                    <td className="py-3 px-2">
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
-                    </td>
-                    <td className="py-3 px-2 font-medium text-slate-900">
-                      {c.nome}
-                    </td>
-                    <td className="py-3 px-2 text-center text-slate-600">
-                      {c.propostas}
-                    </td>
-                    <td className="py-3 px-2 text-right font-bold text-green-600">
-                      R$ {fmt(c.comissao)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    {m.label}
+                  </button>
+                )
+              })}
+            </div>
 
-      {/* ── Navegação mensal ── */}
-      {timeline.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <button
-              onClick={() => navegarMes('prev')}
-              disabled={idxMes <= 0}
-              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-900">
-                {dadosMesSelecionado?.label || '—'}
-              </h3>
-              <p className="text-sm text-slate-400">
-                {dadosMesSelecionado?.qtd || 0} propostas no mês
-              </p>
-            </div>
-            <button
-              onClick={() => navegarMes('next')}
-              disabled={idxMes >= timeline.length - 1}
-              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+            {dadosMes && (
+              <div className="p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                  <button
+                    onClick={() => mesAnterior && setMesSelecionado(mesAnterior)}
+                    disabled={!mesAnterior}
+                    className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-slate-600" />
+                  </button>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900">{dadosMes.label}</h3>
+                  <button
+                    onClick={() => mesProximo && setMesSelecionado(mesProximo)}
+                    disabled={!mesProximo}
+                    className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5 text-slate-600" />
+                  </button>
+                </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 rounded-xl p-4 text-center">
-              <p className="text-xs text-blue-600 font-medium mb-1">
-                Comissão Gerada
-              </p>
-              <p className="text-xl font-bold text-blue-700">
-                R$ {fmt(dadosMesSelecionado?.total || 0)}
-              </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                    <div className="text-xs font-medium text-blue-600 mb-1">Total Gerado</div>
+                    <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
+                    <div className="text-xs text-blue-500 mt-1">{dadosMes.qtd} proposta(s)</div>
+                  </div>
+
+                  <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                    <div className="text-xs font-medium text-emerald-600 mb-1">Recebido</div>
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-900">R$ {fmt(dadosMes.recebido)}</div>
+                    <div className="text-xs text-emerald-500 mt-1">Consórcio 5x + outros 1x</div>
+                  </div>
+
+                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                    <div className="text-xs font-medium text-amber-600 mb-1">Diferença</div>
+                    <div className="text-xl sm:text-2xl font-bold text-amber-900">R$ {fmt(dadosMes.total - dadosMes.recebido)}</div>
+                    <div className="text-xs text-amber-500 mt-1">Gerado − Recebido</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Últimas Propostas */}
+        {ultimasPropostas.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">📋 Últimas Propostas</h2>
+              <Link href="/propostas" className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium">
+                Ver todas →
+              </Link>
             </div>
-            <div className="bg-green-50 rounded-xl p-4 text-center">
-              <p className="text-xs text-green-600 font-medium mb-1">
-                Recebido
-              </p>
-              <p className="text-xl font-bold text-green-700">
-                R$ {fmt(dadosMesSelecionado?.recebido || 0)}
-              </p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-              <p className="text-xs text-slate-500 font-medium mb-1">
-                Variação
-              </p>
-              {variacao !== null ? (
-                <p
-                  className={`text-xl font-bold flex items-center justify-center gap-1 ${
-                    parseFloat(variacao) >= 0
-                      ? 'text-green-600'
-                      : 'text-red-500'
-                  }`}
+
+            <div className="divide-y divide-slate-100">
+              {ultimasPropostas.map((p) => (
+                <div
+                  key={p.id}
+                  href={`/propostas/${p.id}`}
+                  className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 hover:bg-slate-50 transition-colors"
                 >
-                  {parseFloat(variacao) >= 0 ? (
-                    <ArrowUpRight className="w-4 h-4" />
-                  ) : (
-                    <ArrowDownRight className="w-4 h-4" />
-                  )}
-                  {variacao}%
-                </p>
-              ) : (
-                <p className="text-xl font-bold text-slate-300">—</p>
-              )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-mono text-slate-400">#{p.numero_proposta}</span>
+                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                        {p.tipo_proposta_codigo}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-slate-900 truncate">{p.nome_cliente}</div>
+                  </div>
+                  <div className="text-right ml-4 flex-shrink-0">
+                    <div className="text-sm font-bold text-slate-900">R$ {fmt(p.comissao_total || 0)}</div>
+                    <div className="text-xs text-slate-500">
+                      {new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ── Gráfico ── */}
-      {timeline.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">
-            📊 Evolução de Comissões
-          </h2>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={timeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: '#94a3b8' }}
-                />
-                <YAxis
-                  tickFormatter={formatCurrencyShort}
-                  tick={{ fontSize: 11, fill: '#94a3b8' }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12, paddingTop: 16 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="recebido"
-                  name="Recebido"
-                  fill="#dcfce7"
-                  stroke="#22c55e"
-                  strokeWidth={2}
-                />
-                <Bar
-                  dataKey="total"
-                  name="Comissão Gerada"
-                  fill="#3b82f6"
-                  radius={[6, 6, 0, 0]}
-                  barSize={32}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="recebido"
-                  name="Recebido (linha)"
-                  stroke="#22c55e"
-                  strokeWidth={2}
-                  dot={{ r: 4, fill: '#22c55e' }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* ── Últimas propostas ── */}
-      {ultimasPropostas.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-slate-900">
-              📋 Últimas Propostas
-            </h2>
-            <Link
-              href="/propostas"
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Ver todas →
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-slate-400 text-xs uppercase border-b border-slate-100">
-                  <th className="text-left py-3 px-2">Nº</th>
-                  <th className="text-left py-3 px-2">Cliente</th>
-                  <th className="text-left py-3 px-2">Tipo</th>
-                  <th className="text-right py-3 px-2">Valor</th>
-                  <th className="text-right py-3 px-2">Comissão</th>
-                  <th className="text-right py-3 px-2">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ultimasPropostas.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-slate-50 hover:bg-slate-50 transition"
-                  >
-                    <td className="py-3 px-2 font-medium text-slate-900">
-                      {p.numero_proposta}
-                    </td>
-                    <td className="py-3 px-2 text-slate-700">
-                      {p.nome_cliente}
-                    </td>
-                    <td className="py-3 px-2 text-slate-500">
-                      {p.tipo_proposta_codigo}
-                    </td>
-                    <td className="py-3 px-2 text-right text-slate-700">
-                      R$ {fmt(p.valor_contratado || 0)}
-                    </td>
-                    <td className="py-3 px-2 text-right font-bold text-green-600">
-                      R$ {fmt(p.comissao_total || 0)}
-                    </td>
-                    <td className="py-3 px-2 text-right text-slate-400">
-                      {new Date(p.data_proposta).toLocaleDateString('pt-BR')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
