@@ -15,23 +15,31 @@ export default function RootLayout({
   const pathname = usePathname()
   const supabase = createClient()
   const [user, setUser] = useState<any>(null)
+  const [nomeUsuario, setNomeUsuario] = useState('')
   const [isMaster, setIsMaster] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const carregarDadosUsuario = async (userId: string, email?: string) => {
+    const { data: userData } = await supabase
+      .from('usuarios')
+      .select('nome, is_master')
+      .eq('id', userId)
+      .single()
+
+    setIsMaster(userData?.is_master || false)
+    setNomeUsuario(userData?.nome || email || 'Usuário')
+  }
+
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
       setUser(session?.user || null)
 
       if (session?.user) {
-        // Busca is_master da tabela usuarios
-        const { data: userData } = await supabase
-          .from('usuarios')
-          .select('is_master')
-          .eq('id', session.user.id)
-          .single()
-
-        setIsMaster(userData?.is_master || false)
+        await carregarDadosUsuario(session.user.id, session.user.email)
       }
 
       setLoading(false)
@@ -43,27 +51,22 @@ export default function RootLayout({
 
     checkUser()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user || null)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user || null)
 
-        if (session?.user) {
-          const { data: userData } = await supabase
-            .from('usuarios')
-            .select('is_master')
-            .eq('id', session.user.id)
-            .single()
-
-          setIsMaster(userData?.is_master || false)
-        } else {
-          setIsMaster(false)
-        }
-
-        if (!session && pathname !== '/login') {
-          router.push('/login')
-        }
+      if (session?.user) {
+        await carregarDadosUsuario(session.user.id, session.user.email)
+      } else {
+        setIsMaster(false)
+        setNomeUsuario('')
       }
-    )
+
+      if (!session && pathname !== '/login') {
+        router.push('/login')
+      }
+    })
 
     return () => subscription.unsubscribe()
   }, [supabase, router, pathname])
@@ -91,10 +94,10 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="bg-slate-50">
         {!isLoginPage && user && (
-          <Navbar 
-            userName={user.email || 'Usuário'} 
+          <Navbar
+            userName={nomeUsuario}
             isMaster={isMaster}
-            onLogout={handleLogout} 
+            onLogout={handleLogout}
           />
         )}
         {children}
