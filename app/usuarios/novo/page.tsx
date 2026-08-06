@@ -131,7 +131,7 @@ export default function NovoUsuarioPage() {
     return true
   }
 
- ' const cadastrar = async (e: React.FormEvent) => {
+ const cadastrar = async (e: React.FormEvent) => {
   e.preventDefault()
   setErro(null)
 
@@ -207,7 +207,7 @@ export default function NovoUsuarioPage() {
   } finally {
     setSalvando(false)
   }
-}'
+}
 
   if (loadingUser || loading) {
     return (
