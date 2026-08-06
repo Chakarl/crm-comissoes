@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
 import Link from 'next/link'
-import { Plus, Search, FileText, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, FileText, Pencil, Trash2, Users } from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
 
@@ -19,6 +19,7 @@ interface Proposta {
   valor_contratado: number
   prazo: number | null
   comissao_total: number
+  usuario_id: string
 }
 
 export default function PropostasPage() {
@@ -30,26 +31,51 @@ export default function PropostasPage() {
   const [mesFiltro, setMesFiltro] = useState<string | null>(null)
   const supabase = createClient()
 
+  // ── Filtro por corretor (master only) ──
+  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
+  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
+
+  useEffect(() => {
+    if (usuario) {
+      if (usuario.is_master) carregarCorretores()
+      loadPropostas()
+    }
+  }, [usuario])
+
+  // Recarrega propostas quando muda o filtro de corretor
   useEffect(() => {
     if (usuario) loadPropostas()
-  }, [usuario])
+  }, [corretorFiltro])
 
   useEffect(() => {
     setPagina(1)
   }, [search, mesFiltro])
 
+  const carregarCorretores = async () => {
+    const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
+    if (usuarios) {
+      const corretores = usuarios
+        .filter((u: any) => !u.is_master)
+        .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
+      setListaCorretores(corretores)
+    }
+  }
+
   const loadPropostas = async () => {
     if (!usuario) return
+    setLoading(true)
 
     let query = supabase
       .from('propostas')
       .select(
-        'id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total'
+        'id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total, usuario_id'
       )
       .order('data_proposta', { ascending: false })
 
     if (!usuario.is_master) {
       query = query.eq('usuario_id', usuario.id)
+    } else if (corretorFiltro !== 'todos') {
+      query = query.eq('usuario_id', corretorFiltro)
     }
 
     const { data, error } = await query
@@ -76,6 +102,10 @@ export default function PropostasPage() {
       setPropostas((prev) => prev.filter((p) => p.id !== id))
     }
   }
+
+  // Mapa de nomes dos corretores para exibição
+  const nomeCorretorMap: Record<string, string> = {}
+  listaCorretores.forEach((c) => { nomeCorretorMap[c.id] = c.nome })
 
   const filtered = propostas.filter((p) => {
     const matchMes = !mesFiltro || p.data_proposta?.startsWith(mesFiltro)
@@ -120,6 +150,31 @@ export default function PropostasPage() {
           </Link>
         </div>
 
+        {/* ── Filtro por Corretor (master only) ── */}
+        {usuario?.is_master && (
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Users className="w-4 h-4 text-violet-500" />
+              <span className="font-medium">Corretor:</span>
+            </div>
+            <select
+              value={corretorFiltro}
+              onChange={(e) => {
+                setCorretorFiltro(e.target.value)
+                setPagina(1)
+              }}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="todos">Todos os Corretores</option>
+              {listaCorretores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Busca */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="relative">
@@ -152,6 +207,11 @@ export default function PropostasPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Cliente
                 </th>
+                {usuario?.is_master && corretorFiltro === 'todos' && (
+                  <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                    Corretor
+                  </th>
+                )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Tipo
                 </th>
@@ -181,6 +241,11 @@ export default function PropostasPage() {
                   <td className="px-6 py-4 text-slate-700">
                     {p.nome_cliente}
                   </td>
+                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                    <td className="px-6 py-4 text-slate-600 text-sm">
+                      {nomeCorretorMap[p.usuario_id] || '—'}
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
                       {p.tipo_proposta_codigo}
@@ -213,9 +278,7 @@ export default function PropostasPage() {
                         <Pencil className="w-4 h-4" />
                       </Link>
                       <button
-                        onClick={() =>
-                          handleDelete(p.id, p.numero_proposta)
-                        }
+                        onClick={() => handleDelete(p.id, p.numero_proposta)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Excluir"
                       >
@@ -225,81 +288,110 @@ export default function PropostasPage() {
                   </td>
                 </tr>
               ))}
+              {fatia.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={usuario?.is_master && corretorFiltro === 'todos' ? 8 : 7}
+                    className="px-6 py-12 text-center text-slate-500"
+                  >
+                    Nenhuma proposta encontrada.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhuma proposta encontrada</p>
-            </div>
-          )}
         </div>
 
         {/* Mobile Cards */}
-        <div className="lg:hidden space-y-4">
+        <div className="lg:hidden space-y-3">
           {fatia.map((p) => (
             <div
               key={p.id}
               className="bg-white rounded-xl border border-slate-200 p-4"
             >
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-mono text-slate-400">
                       #{p.numero_proposta}
                     </span>
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
                       {p.tipo_proposta_codigo}
                     </span>
                   </div>
-                  <div className="font-semibold text-slate-900">
+                  <div className="text-sm font-semibold text-slate-900">
                     {p.nome_cliente}
                   </div>
+                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Corretor: {nomeCorretorMap[p.usuario_id] || '—'}
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   <Link
                     href={`/propostas/${p.id}/editar`}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
                   >
                     <Pencil className="w-4 h-4" />
                   </Link>
                   <button
-                    onClick={() =>
-                      handleDelete(p.id, p.numero_proposta)
-                    }
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
+                    onClick={() => handleDelete(p.id, p.numero_proposta)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">
-                  {new Date(
-                    p.data_proposta + 'T00:00:00'
-                  ).toLocaleDateString('pt-BR')}
-                </span>
-                <span className="font-bold text-green-700">
-                  {p.comissao_total.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  })}
-                </span>
+
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-slate-500">Data:</span>{' '}
+                  <span className="text-slate-700">
+                    {new Date(
+                      p.data_proposta + 'T00:00:00'
+                    ).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Valor:</span>{' '}
+                  <span className="text-slate-700">
+                    {p.valor_contratado.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-500">Comissão:</span>{' '}
+                  <span className="font-semibold text-green-700">
+                    {p.comissao_total.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
 
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhuma proposta encontrada</p>
+          {fatia.length === 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+              Nenhuma proposta encontrada.
             </div>
           )}
         </div>
 
         {/* Paginação */}
-        <Paginacao pagina={pag} total={totalPaginas} onChange={setPagina} />
+        {totalPaginas > 1 && (
+          <div className="mt-6">
+            <Paginacao
+              paginaAtual={pag}
+              totalPaginas={totalPaginas}
+              onMudar={setPagina}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
