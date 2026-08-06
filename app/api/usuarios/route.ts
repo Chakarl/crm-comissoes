@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, senha, nome, telefone, endereco, token } = body
 
+    // Valida campos obrigatórios
     if (!email || !senha || !nome || !telefone) {
       return NextResponse.json(
         { erro: 'Campos obrigatórios: email, senha, nome, telefone' },
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Valida token
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -72,11 +74,12 @@ export async function POST(request: NextRequest) {
     
     if (authError || !user) {
       return NextResponse.json(
-        { erro: 'Token inválido ou expirado' },
+        { erro: 'Sessão inválida ou expirada. Faça login novamente.' },
         { status: 401 }
       )
     }
 
+    // Verifica se é master
     const { data: usuarioLogado, error: usuarioError } = await supabaseAdmin
       .from('usuarios')
       .select('is_master')
@@ -86,108 +89,51 @@ export async function POST(request: NextRequest) {
     if (usuarioError) {
       console.error('Erro ao verificar master:', usuarioError)
       return NextResponse.json(
-        { erro: `Erro ao verificar permissões: ${usuarioError.message}` },
+        { erro: 'Erro ao verificar permissões. Tente novamente.' },
         { status: 500 }
       )
     }
 
     if (!usuarioLogado?.is_master) {
       return NextResponse.json(
-        { erro: 'Apenas usuários master podem cadastrar' },
+        { erro: 'Apenas usuários master podem cadastrar novos usuários.' },
         { status: 403 }
       )
     }
 
-    console.log('Criando usuário no Auth:', email)
-    
-    // MÉTODO CORRETO: admin.createUser com confirmação automática
+    console.log('📝 Iniciando cadastro:', { email, nome })
+
+    // Verifica se email já existe
+    const { data: emailExiste } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('email', email)
+      .single()
+
+    if (emailExiste) {
+      return NextResponse.json(
+        { erro: 'Este e-mail já está cadastrado no sistema.' },
+        { status: 400 }
+      )
+    }
+
+    console.log('✅ Email disponível, criando usuário no Auth...')
+
+    // Cria usuário no Auth com email confirmado
     const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
-      email_confirm: true, // Confirma automaticamente
-      user_metadata: { 
-        nome 
-      }
+      email_confirm: true, // Confirma email automaticamente
+      user_metadata: { nome }
     })
 
     if (createAuthError) {
-      console.error('Erro ao criar no Auth:', createAuthError)
+      console.error('❌ Erro ao criar no Auth:', createAuthError)
       
-      if (createAuthError.message?.includes('already registered') || 
-          createAuthError.message?.includes('already exists') ||
-          createAuthError.message?.includes('User already registered')) {
+      // Tratamento de erros específicos
+      if (createAuthError.message?.toLowerCase().includes('already')) {
         return NextResponse.json(
-          { erro: 'Este email já está cadastrado no sistema' },
+          { erro: 'Este e-mail já está cadastrado.' },
           { status: 400 }
         )
       }
-      
-      return NextResponse.json(
-        { erro: `Erro ao criar usuário: ${createAuthError.message}` },
-        { status: 500 }
-      )
-    }
-
-    if (!authData?.user) {
-      console.error('Auth não retornou usuário')
-      return NextResponse.json(
-        { erro: 'Falha ao criar usuário no sistema de autenticação' },
-        { status: 500 }
-      )
-    }
-
-    console.log('✅ Usuário criado no Auth:', authData.user.id)
-
-    const { data: novoUsuario, error: insertError } = await supabaseAdmin
-      .from('usuarios')
-      .insert({
-        id: authData.user.id,
-        email,
-        nome,
-        telefone,
-        endereco: endereco || null,
-        is_master: false,
-      })
-      .select()
-      .single()
-
-    if (insertError) {
-      console.error('Erro ao inserir na tabela:', insertError)
-      
-      // Reverte criação no Auth
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-        console.log('Usuário revertido do Auth')
-      } catch (deleteError) {
-        console.error('Erro ao reverter usuário:', deleteError)
-      }
-      
-      return NextResponse.json(
-        { erro: `Erro ao salvar dados: ${insertError.message}` },
-        { status: 500 }
-      )
-    }
-
-    console.log('✅ Usuário salvo na tabela')
-
-    // Envia email customizado
-    try {
-      await enviarEmailBoasVindas(email, nome, senha)
-      console.log('✅ Email de boas-vindas enviado')
-    } catch (emailError: any) {
-      console.warn('⚠️ Email não enviado (não crítico):', emailError.message)
-    }
-
-    return NextResponse.json({ 
-      sucesso: true, 
-      usuario: novoUsuario 
-    }, { status: 201 })
-
-  } catch (error: any) {
-    console.error('❌ Erro inesperado no POST /api/usuarios:', error)
-    return NextResponse.json(
-      { erro: error.message || 'Erro interno do servidor' },
-      { status: 500 }
-    )
-  }
-}
