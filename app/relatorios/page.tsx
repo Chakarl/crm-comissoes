@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-import { Search, FileSpreadsheet, FileText } from 'lucide-react'
+import { useUsuario } from '@/hooks/useUsuario'
+import { Search, FileSpreadsheet, FileText, Users as UsersIcon } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 const supabase = createClient()
@@ -25,11 +25,17 @@ interface LinhaRelatorio {
 }
 
 export default function RelatoriosPage() {
-  const router = useRouter()
+  const { usuario, loading: loadingUser } = useUsuario()
   const [tipos, setTipos] = useState<TipoProposta[]>([])
   const [dados, setDados] = useState<LinhaRelatorio[]>([])
   const [loading, setLoading] = useState(false)
   const [buscou, setBuscou] = useState(false)
+
+  // ── Filtro de corretor (master only) ──
+  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
+  const [listaCorretores, setListaCorretores] = useState<
+    { id: string; nome: string }[]
+  >([])
 
   const hoje = new Date()
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
@@ -53,7 +59,22 @@ export default function RelatoriosPage() {
       })
   }, [])
 
+  useEffect(() => {
+    if (usuario?.is_master) carregarCorretores()
+  }, [usuario])
+
+  const carregarCorretores = async () => {
+    const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
+    if (usuarios) {
+      const corretores = usuarios
+        .filter((u: any) => !u.is_master)
+        .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
+      setListaCorretores(corretores)
+    }
+  }
+
   async function buscar() {
+    if (!usuario) return
     setLoading(true)
     setBuscou(true)
 
@@ -65,6 +86,13 @@ export default function RelatoriosPage() {
       .gte('data_proposta', dataInicio)
       .lte('data_proposta', dataFim)
       .order('data_proposta', { ascending: false })
+
+    // ── Aplica filtro de usuário ──
+    if (!usuario.is_master) {
+      query = query.eq('usuario_id', usuario.id)
+    } else if (corretorFiltro !== 'todos') {
+      query = query.eq('usuario_id', corretorFiltro)
+    }
 
     if (tipoFiltro) {
       query = query.eq('tipo_proposta_codigo', tipoFiltro)
@@ -103,8 +131,13 @@ export default function RelatoriosPage() {
   function exportarExcel() {
     const ws = XLSX.utils.json_to_sheet(linhasFormatadas())
     ws['!cols'] = [
-      { wch: 18 }, { wch: 30 }, { wch: 25 },
-      { wch: 12 }, { wch: 16 }, { wch: 12 }, { wch: 16 },
+      { wch: 18 },
+      { wch: 30 },
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 16 },
     ]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Comissões')
@@ -114,7 +147,9 @@ export default function RelatoriosPage() {
   function exportarCSV() {
     const ws = XLSX.utils.json_to_sheet(linhasFormatadas())
     const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';' })
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob(['\uFEFF' + csv], {
+      type: 'text/csv;charset=utf-8;',
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -126,6 +161,14 @@ export default function RelatoriosPage() {
   const totalValor = dados.reduce((s, d) => s + d.valor_contratado, 0)
   const totalComissao = dados.reduce((s, d) => s + d.comissao_total, 0)
 
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-600">Carregando…</div>
+      </div>
+    )
+  }
+
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <h1 className="text-2xl font-bold mb-6">📊 Relatório de Comissões</h1>
@@ -134,7 +177,9 @@ export default function RelatoriosPage() {
       <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 mb-6 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm text-slate-500 mb-1">Data Início</label>
+            <label className="block text-sm text-slate-500 mb-1">
+              Data Início
+            </label>
             <input
               type="date"
               value={dataInicio}
@@ -143,7 +188,9 @@ export default function RelatoriosPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-500 mb-1">Data Fim</label>
+            <label className="block text-sm text-slate-500 mb-1">
+              Data Fim
+            </label>
             <input
               type="date"
               value={dataFim}
@@ -152,7 +199,9 @@ export default function RelatoriosPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-500 mb-1">Tipo de Proposta</label>
+            <label className="block text-sm text-slate-500 mb-1">
+              Tipo de Proposta
+            </label>
             <select
               value={tipoFiltro}
               onChange={(e) => setTipoFiltro(e.target.value)}
@@ -166,17 +215,57 @@ export default function RelatoriosPage() {
               ))}
             </select>
           </div>
-          <div className="flex items-end">
+
+          {/* ── Filtro Corretor (master only) ── */}
+          {usuario?.is_master ? (
+            <div>
+              <label className="block text-sm text-slate-500 mb-1">
+                <span className="inline-flex items-center gap-1">
+                  <UsersIcon className="w-3.5 h-3.5 text-violet-500" />
+                  Corretor
+                </span>
+              </label>
+              <select
+                value={corretorFiltro}
+                onChange={(e) => setCorretorFiltro(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900"
+              >
+                <option value="todos">Todos os Corretores</option>
+                {listaCorretores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            /* Mantém o botão na 4ª coluna quando não é master */
+            <div className="flex items-end">
+              <button
+                onClick={buscar}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                <Search className="w-4 h-4" />
+                {loading ? 'Buscando…' : 'Buscar'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Botão Buscar em linha separada quando é master (5 campos) */}
+        {usuario?.is_master && (
+          <div className="mt-4 flex justify-end">
             <button
               onClick={buscar}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
             >
               <Search className="w-4 h-4" />
               {loading ? 'Buscando…' : 'Buscar'}
             </button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ─── Resultados ─── */}
@@ -187,15 +276,21 @@ export default function RelatoriosPage() {
             <div className="flex flex-wrap gap-4">
               <div className="bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm">
                 <p className="text-xs text-slate-500">Propostas</p>
-                <p className="text-lg font-bold text-slate-900">{dados.length}</p>
+                <p className="text-lg font-bold text-slate-900">
+                  {dados.length}
+                </p>
               </div>
               <div className="bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm">
                 <p className="text-xs text-slate-500">Total Contratado</p>
-                <p className="text-lg font-bold text-blue-600">{brl(totalValor)}</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {brl(totalValor)}
+                </p>
               </div>
               <div className="bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm">
                 <p className="text-xs text-slate-500">Total Comissão</p>
-                <p className="text-lg font-bold text-green-600">{brl(totalComissao)}</p>
+                <p className="text-lg font-bold text-green-600">
+                  {brl(totalComissao)}
+                </p>
               </div>
             </div>
 
@@ -231,8 +326,12 @@ export default function RelatoriosPage() {
                   <tr>
                     <th className="px-4 py-3 text-left">Nº Contrato</th>
                     <th className="px-4 py-3 text-left">Cliente</th>
-                    <th className="px-4 py-3 text-left hidden sm:table-cell">Produto</th>
-                    <th className="px-4 py-3 text-left hidden lg:table-cell">Data</th>
+                    <th className="px-4 py-3 text-left hidden sm:table-cell">
+                      Produto
+                    </th>
+                    <th className="px-4 py-3 text-left hidden lg:table-cell">
+                      Data
+                    </th>
                     <th className="px-4 py-3 text-right">Valor</th>
                     <th className="px-4 py-3 text-right">Comissão</th>
                   </tr>
@@ -243,7 +342,9 @@ export default function RelatoriosPage() {
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">
                         {d.numero_proposta || '-'}
                       </td>
-                      <td className="px-4 py-3 text-slate-900">{d.nome_cliente}</td>
+                      <td className="px-4 py-3 text-slate-900">
+                        {d.nome_cliente}
+                      </td>
                       <td className="px-4 py-3 hidden sm:table-cell text-slate-500">
                         {nomeDoTipo(d.tipo_proposta_codigo)}
                       </td>
@@ -264,7 +365,9 @@ export default function RelatoriosPage() {
                     <td className="px-4 py-3" colSpan={4}>
                       Total
                     </td>
-                    <td className="px-4 py-3 text-right">{brl(totalValor)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {brl(totalValor)}
+                    </td>
                     <td className="px-4 py-3 text-right text-green-600">
                       {brl(totalComissao)}
                     </td>
