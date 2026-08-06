@@ -14,49 +14,19 @@ const supabaseAdmin = createClient(
   }
 )
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const token = searchParams.get('token')
-
-    if (!token) {
-      return NextResponse.json({ erro: 'Token não fornecido' }, { status: 401 })
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
-    if (authError || !user) {
-      return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
-    }
-
-    const { data: usuarios, error } = await supabaseAdmin
-      .from('usuarios')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Erro ao buscar usuários:', error)
-      return NextResponse.json({ erro: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json(usuarios || [])
-
-  } catch (error: any) {
-    console.error('Erro no GET /api/usuarios:', error)
-    return NextResponse.json({ erro: error.message }, { status: 500 })
-  }
-}
-
-async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
+async function criarUsuarioViaAPI(
+  email: string,
+  senha: string,
+  nome: string,
+  telefone: string,
+  endereco: string | null,
+  senhaHash: string,
+  criadoPor: string
+) {
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users`
-  
+
   console.log('🔵 Criando usuário via API REST:', email)
-  
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -68,7 +38,13 @@ async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
       email,
       password: senha,
       email_confirm: true,
-      user_metadata: { nome }
+      user_metadata: {
+        nome,
+        telefone,
+        endereco: endereco || '',
+        senha_hash: senhaHash,
+        criado_por: criadoPor
+      }
     })
   })
 
@@ -95,7 +71,7 @@ async function deletarUsuarioAuth(userId: string) {
         }
       }
     )
-    
+
     if (response.ok) {
       console.log('🗑️ Usuário deletado do Auth:', userId)
     } else {
@@ -106,18 +82,40 @@ async function deletarUsuarioAuth(userId: string) {
   }
 }
 
-async function limparRegistrosOrfaos(supabaseAdmin: any) {
+export async function GET(request: NextRequest) {
   try {
-    const { error } = await supabaseAdmin
-      .from('usuarios')
-      .delete()
-      .or('nome.is.null,senha_hash.is.null')
-    
-    if (!error) {
-      console.log('🧹 Registros órfãos limpos')
+    const { searchParams } = new URL(request.url)
+    const token = searchParams.get('token')
+
+    if (!token) {
+      return NextResponse.json({ erro: 'Token não fornecido' }, { status: 401 })
     }
-  } catch (error) {
-    console.error('⚠️ Erro ao limpar órfãos:', error)
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+
+    if (authError || !user) {
+      return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
+    }
+
+    const { data: usuarios, error } = await supabaseAdmin
+      .from('usuarios')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Erro ao buscar usuários:', error)
+      return NextResponse.json({ erro: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json(usuarios || [])
+  } catch (error: any) {
+    console.error('Erro no GET /api/usuarios:', error)
+    return NextResponse.json({ erro: error.message }, { status: 500 })
   }
 }
 
@@ -141,7 +139,7 @@ export async function POST(request: NextRequest) {
     )
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
+
     if (authError || !user) {
       return NextResponse.json(
         { erro: 'Sessão inválida ou expirada' },
@@ -172,7 +170,7 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Iniciando cadastro:', email)
 
-    // 1. Verifica se email já existe
+    // 1. Verifica se email já existe na tabela
     const { data: emailExiste, error: checkError } = await supabaseAdmin
       .from('usuarios')
       .select('id')
@@ -199,21 +197,31 @@ export async function POST(request: NextRequest) {
     const senhaHash = await bcrypt.hash(senha, 10)
     console.log('🔒 Senha hashada gerada')
 
-    // 3. Cria usuário no Auth
+    // 3. Cria usuário no Auth (o trigger handle_new_user faz o INSERT na tabela)
     let authData
     try {
-      authData = await criarUsuarioViaAPI(email, senha, nome)
+      authData = await criarUsuarioViaAPI(
+        email,
+        senha,
+        nome,
+        telefone,
+        endereco,
+        senhaHash,
+        user.id
+      )
     } catch (error: any) {
       console.error('❌ Erro ao criar no Auth:', error)
-      
-      if (error.message?.toLowerCase().includes('already') || 
-          error.message?.toLowerCase().includes('exists')) {
+
+      if (
+        error.message?.toLowerCase().includes('already') ||
+        error.message?.toLowerCase().includes('exists')
+      ) {
         return NextResponse.json(
           { erro: 'Este e-mail já está cadastrado no sistema de autenticação' },
           { status: 400 }
         )
       }
-      
+
       return NextResponse.json(
         { erro: `Erro ao criar usuário: ${error.message}` },
         { status: 500 }
@@ -229,20 +237,31 @@ export async function POST(request: NextRequest) {
 
     authUserId = authData.id
 
-    // 4. Insere na tabela usuarios (COM RETRY E LIMPEZA)
-    let tentativas = 0
-    let novoUsuario = null
-    let insertError = null
+    // 4. Aguarda o trigger popular a tabela e verifica
+    await new Promise(resolve => setTimeout(resolve, 1500))
 
-    while (tentativas < 3 && !novoUsuario) {
-      tentativas++
-      console.log(`💾 Tentativa ${tentativas} de inserir na tabela...`)
+    const { data: novoUsuario, error: verificaError } = await supabaseAdmin
+      .from('usuarios')
+      .select('*')
+      .eq('id', authUserId)
+      .single()
 
-      const resultado = await supabaseAdmin
+    if (verificaError || !novoUsuario) {
+      console.error('❌ Trigger não criou o registro:', verificaError)
+      await deletarUsuarioAuth(authUserId)
+      return NextResponse.json(
+        { erro: 'Erro ao salvar dados do usuário' },
+        { status: 500 }
+      )
+    }
+
+    // 5. Verifica se os campos foram populados corretamente
+    if (!novoUsuario.nome || !novoUsuario.senha_hash) {
+      console.error('⚠️ Registro incompleto, atualizando manualmente...')
+
+      const { data: atualizado, error: updateError } = await supabaseAdmin
         .from('usuarios')
-        .insert({
-          id: authUserId,
-          email: email,
+        .update({
           nome: nome,
           telefone: telefone,
           endereco: endereco || null,
@@ -251,74 +270,58 @@ export async function POST(request: NextRequest) {
           ativo: true,
           criado_por: user.id
         })
+        .eq('id', authUserId)
         .select()
         .single()
 
-      novoUsuario = resultado.data
-      insertError = resultado.error
-
-      if (insertError) {
-        console.error(`❌ Tentativa ${tentativas} falhou:`, insertError)
-        
-        // Se for erro de chave duplicada, aguarda e tenta novamente
-        if (insertError.code === '23505' && tentativas < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        } else {
-          break
-        }
-      } else {
-        console.log('✅ Usuário inserido na tabela:', novoUsuario.id)
-      }
-    }
-
-    if (insertError) {
-      console.error('❌ Falha definitiva ao inserir:', insertError)
-      
-      // REVERTE: deleta do Auth
-      await deletarUsuarioAuth(authUserId)
-      
-      // LIMPA REGISTRO ÓRFÃO SE EXISTIR
-      await supabaseAdmin
-        .from('usuarios')
-        .delete()
-        .eq('id', authUserId)
-      
-      if (insertError.code === '23505') {
+      if (updateError) {
+        console.error('❌ Falha ao atualizar registro:', updateError)
+        await deletarUsuarioAuth(authUserId)
+        await supabaseAdmin.from('usuarios').delete().eq('id', authUserId)
         return NextResponse.json(
-          { erro: 'Conflito de ID detectado. Por favor, tente novamente.' },
-          { status: 409 }
+          { erro: 'Erro ao completar cadastro do usuário' },
+          { status: 500 }
         )
       }
-      
-      return NextResponse.json(
-        { erro: `Erro ao salvar dados: ${insertError.message}` },
-        { status: 500 }
-      )
+
+      console.log('✅ Registro atualizado com sucesso:', atualizado.id)
+
+      // 6. Envia email de boas-vindas
+      try {
+        await enviarEmailBoasVindas({
+          email: email,
+          nome: nome,
+          senha: senha
+        })
+        console.log('📧 Email de boas-vindas enviado para:', email)
+      } catch (emailError) {
+        console.error('⚠️ Erro ao enviar email (não crítico):', emailError)
+      }
+
+      return NextResponse.json(atualizado)
     }
 
-    // 5. Envia email de boas-vindas
+    console.log('✅ Usuário completo criado pelo trigger:', novoUsuario.id)
+
+    // 6. Envia email de boas-vindas
     try {
-      await enviarEmailBoasVindas(email, nome, senha)
-      console.log('✅ Email de boas-vindas enviado')
-    } catch (emailError: any) {
-      console.error('⚠️ Falha ao enviar email:', emailError)
+      await enviarEmailBoasVindas({
+        email: email,
+        nome: nome,
+        senha: senha
+      })
+      console.log('📧 Email de boas-vindas enviado para:', email)
+    } catch (emailError) {
+      console.error('⚠️ Erro ao enviar email (não crítico):', emailError)
     }
-
-    // 6. Limpa possíveis registros órfãos antes de retornar
-    await limparRegistrosOrfaos(supabaseAdmin)
 
     return NextResponse.json(novoUsuario)
-
   } catch (error: any) {
     console.error('❌ Erro geral no POST /api/usuarios:', error)
-    
-    // Se criou no Auth mas falhou depois, tenta limpar
+
     if (authUserId) {
       await deletarUsuarioAuth(authUserId)
-      await supabaseAdmin
-        .from('usuarios')
-        .delete()
-        .eq('id', authUserId)
+      await supabaseAdmin.from('usuarios').delete().eq('id', authUserId)
     }
 
     return NextResponse.json(
