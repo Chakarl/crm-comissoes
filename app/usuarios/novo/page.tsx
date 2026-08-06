@@ -6,6 +6,22 @@ import { useUsuario } from '@/hooks/useUsuario'
 import { UserPlus, User, Mail, Phone, MapPin, Lock, Copy, Check, AlertCircle, Loader2, Crown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
+// Função para formatar telefone
+function formatarTelefone(valor: string): string {
+  const numeros = valor.replace(/\D/g, '')
+  
+  if (numeros.length <= 10) {
+    return numeros
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+  } else {
+    return numeros
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d)/, '$1-$2')
+      .slice(0, 15)
+  }
+}
+
 export default function NovoUsuarioPage() {
   const { usuario, loading: loadingUser } = useUsuario()
   const router = useRouter()
@@ -49,6 +65,11 @@ export default function NovoUsuarioPage() {
     navigator.clipboard.writeText(senha)
     setSenhaCopied(true)
     setTimeout(() => setSenhaCopied(false), 2000)
+  }
+
+  const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valorFormatado = formatarTelefone(e.target.value)
+    setTelefone(valorFormatado)
   }
 
   const carregarUsuarios = async () => {
@@ -96,7 +117,7 @@ export default function NovoUsuarioPage() {
           email, 
           senha, 
           nome,
-          telefone,
+          telefone, // Já formatado com (00) 00000-0000
           endereco: endereco.trim() || null,
           token 
         }),
@@ -218,10 +239,11 @@ export default function NovoUsuarioPage() {
                 <input
                   type="tel"
                   value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
+                  onChange={handleTelefoneChange}
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="(11) 98765-4321"
+                  maxLength={15}
                   required
                 />
               </div>
@@ -251,38 +273,40 @@ export default function NovoUsuarioPage() {
                     type="text"
                     value={senha}
                     readOnly
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono"
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono text-sm"
                   />
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                    title="Copiar senha"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-2"
                   >
                     {senhaCopied ? (
-                      <Check className="w-5 h-5 text-green-600" />
+                      <>
+                        <Check className="w-4 h-4 text-green-600" />
+                        <span className="text-sm text-green-600">Copiado!</span>
+                      </>
                     ) : (
-                      <Copy className="w-5 h-5 text-slate-600" />
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span className="text-sm">Copiar</span>
+                      </>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={gerarSenha}
                     disabled={salvando}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300"
+                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors disabled:opacity-50"
                   >
-                    Gerar Nova
+                    🔄 Nova
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
-                  A senha será enviada por email para o usuário
-                </p>
               </div>
 
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {salvando ? (
                   <>
@@ -303,69 +327,49 @@ export default function NovoUsuarioPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-blue-600" />
-              Usuários Cadastrados ({usuarios.length})
+              Usuários Cadastrados
             </h2>
 
-            <div className="space-y-4 max-h-[600px] overflow-y-auto">
-              {usuarios.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">
-                  Nenhum usuário cadastrado ainda
-                </p>
-              ) : (
-                usuarios.map((user) => (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              </div>
+            ) : usuarios.length === 0 ? (
+              <p className="text-slate-500 text-center py-8">Nenhum usuário cadastrado ainda</p>
+            ) : (
+              <div className="space-y-3">
+                {usuarios.map((user) => (
                   <div
                     key={user.id}
                     className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-slate-900">
-                          {user.nome}
-                        </h3>
-                        {user.is_master && (
-                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                            <Crown className="w-3 h-3" />
-                            Master
-                          </span>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-semibold text-slate-900">{user.nome}</p>
+                          {user.is_master && (
+                            <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded flex items-center gap-1">
+                              <Crown className="w-3 h-3" />
+                              Master
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-600 flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          {user.email}
+                        </p>
+                        {user.telefone && (
+                          <p className="text-sm text-slate-600 flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {user.telefone}
+                          </p>
                         )}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        user.ativo
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {user.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1 text-sm text-slate-600">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4" />
-                        {user.email}
-                      </div>
-                      {user.telefone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4" />
-                          {user.telefone}
-                        </div>
-                      )}
-                      {user.endereco && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          {user.endereco}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      <p className="text-xs text-slate-500">
-                        Cadastrado em {new Date(user.criado_em).toLocaleDateString('pt-BR')}
-                      </p>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
