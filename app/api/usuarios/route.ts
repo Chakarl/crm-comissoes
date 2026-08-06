@@ -100,24 +100,29 @@ export async function POST(request: NextRequest) {
 
     console.log('Criando usuário no Auth:', email)
     
+    // CORRIGIDO: Remove email_confirm e adiciona app_metadata para confirmar automaticamente
     const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
-      email_confirm: true,
+      email_confirm: false, // Não tenta enviar email do Supabase
+      user_metadata: {
+        nome: nome
+      }
     })
 
     if (createAuthError) {
       console.error('Erro ao criar no Auth:', createAuthError)
       
-      if (createAuthError.message?.includes('already registered')) {
+      if (createAuthError.message?.includes('already registered') || 
+          createAuthError.message?.includes('already exists')) {
         return NextResponse.json(
-          { erro: 'Este email já está cadastrado' },
+          { erro: 'Este email já está cadastrado no sistema' },
           { status: 400 }
         )
       }
       
       return NextResponse.json(
-        { erro: `Erro ao criar usuário: ${createAuthError.message}` },
+        { erro: `Erro ao criar usuário: ${createAuthError.message || 'Erro desconhecido'}` },
         { status: 500 }
       )
     }
@@ -131,6 +136,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Usuário criado no Auth:', authData.user.id)
+
+    // ADICIONAL: Confirma o email manualmente via Admin API
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
+        email_confirm: true
+      })
+      console.log('Email confirmado automaticamente')
+    } catch (confirmError) {
+      console.warn('Aviso: não foi possível confirmar email automaticamente:', confirmError)
+      // Não bloqueia o cadastro
+    }
 
     const { data: novoUsuario, error: insertError } = await supabaseAdmin
       .from('usuarios')
@@ -148,6 +164,7 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('Erro ao inserir na tabela:', insertError)
       
+      // Reverte criação no Auth
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
       
       return NextResponse.json(
@@ -158,11 +175,13 @@ export async function POST(request: NextRequest) {
 
     console.log('Usuário salvo na tabela')
 
+    // Envia email customizado (não depende do SMTP do Supabase)
     try {
       await enviarEmailBoasVindas(email, nome, senha)
-      console.log('Email enviado')
+      console.log('Email de boas-vindas enviado')
     } catch (emailError: any) {
       console.error('Erro ao enviar email (não crítico):', emailError)
+      // Não bloqueia o cadastro
     }
 
     return NextResponse.json({ 

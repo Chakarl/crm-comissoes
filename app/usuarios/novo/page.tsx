@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
-import { UserPlus, User, Mail, Phone, MapPin, Lock, Copy, Check, AlertCircle, Loader2, Crown } from 'lucide-react'
+import { UserPlus, User, Mail, Phone, MapPin, Lock, Copy, Check, AlertCircle, Loader2, Crown, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function NovoUsuarioPage() {
@@ -51,20 +51,21 @@ export default function NovoUsuarioPage() {
     setTimeout(() => setSenhaCopied(false), 2000)
   }
 
-  // Máscara de telefone
+  // Máscara de telefone brasileira
   const formatarTelefone = (valor: string) => {
     const numero = valor.replace(/\D/g, '')
     
-    if (numero.length <= 10) {
-      return numero
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{4})(\d)/, '$1-$2')
-    }
+    if (numero.length === 0) return ''
+    if (numero.length <= 2) return `(${numero}`
+    if (numero.length <= 6) return `(${numero.slice(0, 2)}) ${numero.slice(2)}`
+    if (numero.length <= 10) return `(${numero.slice(0, 2)}) ${numero.slice(2, 6)}-${numero.slice(6)}`
     
-    return numero
-      .replace(/(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{5})(\d)/, '$1-$2')
-      .substring(0, 15)
+    return `(${numero.slice(0, 2)}) ${numero.slice(2, 7)}-${numero.slice(7, 11)}`
+  }
+
+  const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valorFormatado = formatarTelefone(e.target.value)
+    setTelefone(valorFormatado)
   }
 
   const obterToken = async () => {
@@ -123,6 +124,13 @@ export default function NovoUsuarioPage() {
       return
     }
 
+    // Valida formato do telefone
+    const telefoneLimpo = telefone.replace(/\D/g, '')
+    if (telefoneLimpo.length < 10) {
+      setErro('Telefone inválido. Use o formato (00) 00000-0000')
+      return
+    }
+
     setSalvando(true)
 
     try {
@@ -131,6 +139,8 @@ export default function NovoUsuarioPage() {
       if (!token) {
         throw new Error('Sessão expirada. Faça login novamente.')
       }
+
+      console.log('Enviando requisição para criar usuário...')
 
       const res = await fetch('/api/usuarios', {
         method: 'POST',
@@ -147,9 +157,10 @@ export default function NovoUsuarioPage() {
 
       const data = await res.json()
 
+      console.log('Resposta da API:', res.status, data)
+
       if (!res.ok) {
-        // Exibe o erro real retornado pela API
-        throw new Error(data.erro || `Erro ${res.status}: ${res.statusText}`)
+        throw new Error(data.erro || `Erro ${res.status}: Falha ao cadastrar usuário`)
       }
 
       // Limpa formulário
@@ -263,7 +274,7 @@ export default function NovoUsuarioPage() {
                 <input
                   type="tel"
                   value={telefone}
-                  onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+                  onChange={handleTelefoneChange}
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="(11) 98765-4321"
@@ -283,7 +294,7 @@ export default function NovoUsuarioPage() {
                   onChange={(e) => setEndereco(e.target.value)}
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="Rua, número, bairro"
+                  placeholder="Rua, número, bairro, cidade"
                 />
               </div>
 
@@ -297,25 +308,20 @@ export default function NovoUsuarioPage() {
                     type="text"
                     value={senha}
                     disabled
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono"
+                    className="flex-1 px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg font-mono"
                   />
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                    title="Copiar senha"
+                    className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition flex items-center gap-2"
                   >
-                    {senhaCopied ? (
-                      <Check className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <Copy className="w-5 h-5 text-slate-600" />
-                    )}
+                    {senhaCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                   <button
                     type="button"
                     onClick={gerarSenha}
                     disabled={salvando}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-slate-300"
                   >
                     Nova
                   </button>
@@ -325,7 +331,7 @@ export default function NovoUsuarioPage() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-slate-300 flex items-center justify-center gap-2"
               >
                 {salvando ? (
                   <>
@@ -350,40 +356,44 @@ export default function NovoUsuarioPage() {
             </h2>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {usuarios.map((u) => (
-                <div
-                  key={u.id}
-                  className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-slate-900">{u.nome}</h3>
-                    {u.is_master && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">
-                        <Crown className="w-3 h-3" />
-                        Master
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4" />
-                      {u.email}
+              {usuarios.length === 0 ? (
+                <p className="text-slate-500 text-center py-8">Nenhum usuário cadastrado</p>
+              ) : (
+                usuarios.map((u) => (
+                  <div
+                    key={u.id}
+                    className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">{u.nome}</p>
+                          {u.is_master && (
+                            <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full flex items-center gap-1">
+                              <Crown className="w-3 h-3" />
+                              Master
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-600 flex items-center gap-2 mt-1">
+                          <Mail className="w-3 h-3" />
+                          {u.email}
+                        </p>
+                        <p className="text-sm text-slate-600 flex items-center gap-2 mt-1">
+                          <Phone className="w-3 h-3" />
+                          {u.telefone}
+                        </p>
+                        {u.endereco && (
+                          <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
+                            <MapPin className="w-3 h-3" />
+                            {u.endereco}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    {u.telefone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        {u.telefone}
-                      </div>
-                    )}
-                    {u.endereco && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        {u.endereco}
-                      </div>
-                    )}
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
