@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailBoasVindas } from '@/lib/email'
 
+export async function POST(request: NextRequest) {
+  console.log('=== INÍCIO POST /api/usuarios ===')
+  
+  // ADICIONE ESTA VERIFICAÇÃO NO TOPO:
+  console.log('🔑 Verificando variáveis de ambiente...')
+  console.log('   NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'OK' : '❌ FALTANDO')
+  console.log('   NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : '❌ FALTANDO')
+  console.log('   SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? `OK (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : '❌ FALTANDO')
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('❌ SUPABASE_SERVICE_ROLE_KEY não está configurada!')
+    return NextResponse.json(
+      { erro: 'Configuração do servidor incompleta. Contate o administrador.' },
+      { status: 500 }
+    )
+  }
+
+  try {
+    const body = await request.json()
+    
+    // ... resto do código
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
