@@ -106,6 +106,21 @@ async function deletarUsuarioAuth(userId: string) {
   }
 }
 
+async function limparRegistrosOrfaos(supabaseAdmin: any) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('usuarios')
+      .delete()
+      .or('nome.is.null,senha_hash.is.null')
+    
+    if (!error) {
+      console.log('🧹 Registros órfãos limpos')
+    }
+  } catch (error) {
+    console.error('⚠️ Erro ao limpar órfãos:', error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   let authUserId: string | null = null
 
@@ -157,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Iniciando cadastro:', email)
 
-    // 1. Verifica se email já existe (ÚNICA VERIFICAÇÃO NECESSÁRIA)
+    // 1. Verifica se email já existe
     const { data: emailExiste, error: checkError } = await supabaseAdmin
       .from('usuarios')
       .select('id')
@@ -214,7 +229,7 @@ export async function POST(request: NextRequest) {
 
     authUserId = authData.id
 
-    // 4. Insere na tabela usuarios (COM RETRY SE FALHAR)
+    // 4. Insere na tabela usuarios (COM RETRY E LIMPEZA)
     let tentativas = 0
     let novoUsuario = null
     let insertError = null
@@ -233,7 +248,8 @@ export async function POST(request: NextRequest) {
           endereco: endereco || null,
           senha_hash: senhaHash,
           is_master: false,
-          ativo: true
+          ativo: true,
+          criado_por: user.id
         })
         .select()
         .single()
@@ -242,9 +258,9 @@ export async function POST(request: NextRequest) {
       insertError = resultado.error
 
       if (insertError) {
-        console.error(`❌ Tentativa ${tentativas} falhou:`, insertError.message)
+        console.error(`❌ Tentativa ${tentativas} falhou:`, insertError)
         
-        // Se for erro de chave duplicada, aguarda 500ms e tenta novamente
+        // Se for erro de chave duplicada, aguarda e tenta novamente
         if (insertError.code === '23505' && tentativas < 3) {
           await new Promise(resolve => setTimeout(resolve, 500))
         } else {
@@ -261,40 +277,52 @@ export async function POST(request: NextRequest) {
       // REVERTE: deleta do Auth
       await deletarUsuarioAuth(authUserId)
       
+      // LIMPA REGISTRO ÓRFÃO SE EXISTIR
+      await supabaseAdmin
+        .from('usuarios')
+        .delete()
+        .eq('id', authUserId)
+      
+      if (insertError.code === '23505') {
+        return NextResponse.json(
+          { erro: 'Conflito de ID detectado. Por favor, tente novamente.' },
+          { status: 409 }
+        )
+      }
+      
       return NextResponse.json(
-        { erro: `Erro ao salvar dados (${tentativas} tentativas): ${insertError.message}` },
+        { erro: `Erro ao salvar dados: ${insertError.message}` },
         { status: 500 }
       )
     }
 
-    // 5. Envia email
+    // 5. Envia email de boas-vindas
     try {
       await enviarEmailBoasVindas(email, nome, senha)
-      console.log('📧 Email de boas-vindas enviado')
+      console.log('✅ Email de boas-vindas enviado')
     } catch (emailError: any) {
-      console.warn('⚠️ Falha ao enviar email:', emailError.message)
+      console.error('⚠️ Falha ao enviar email:', emailError)
     }
 
-    return NextResponse.json({
-      mensagem: 'Usuário cadastrado com sucesso',
-      usuario: {
-        id: novoUsuario.id,
-        email: novoUsuario.email,
-        nome: novoUsuario.nome,
-        telefone: novoUsuario.telefone
-      }
-    }, { status: 201 })
+    // 6. Limpa possíveis registros órfãos antes de retornar
+    await limparRegistrosOrfaos(supabaseAdmin)
+
+    return NextResponse.json(novoUsuario)
 
   } catch (error: any) {
     console.error('❌ Erro geral no POST /api/usuarios:', error)
     
-    // Se criou no Auth mas falhou depois, tenta reverter
+    // Se criou no Auth mas falhou depois, tenta limpar
     if (authUserId) {
       await deletarUsuarioAuth(authUserId)
+      await supabaseAdmin
+        .from('usuarios')
+        .delete()
+        .eq('id', authUserId)
     }
-    
+
     return NextResponse.json(
-      { erro: error.message || 'Erro ao processar cadastro' },
+      { erro: error.message || 'Erro interno do servidor' },
       { status: 500 }
     )
   }
