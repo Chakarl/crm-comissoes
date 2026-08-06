@@ -327,49 +327,69 @@ export default function NovoUsuarioPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-blue-600" />
-              Usuários Cadastrados
+              Usuários Cadastrados ({usuarios.length})
             </h2>
 
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              </div>
-            ) : usuarios.length === 0 ? (
-              <p className="text-slate-500 text-center py-8">Nenhum usuário cadastrado ainda</p>
-            ) : (
-              <div className="space-y-3">
-                {usuarios.map((user) => (
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+              {usuarios.length === 0 ? (
+                <p className="text-slate-500 text-center py-8">
+                  Nenhum usuário cadastrado ainda
+                </p>
+              ) : (
+                usuarios.map((user) => (
                   <div
                     key={user.id}
                     className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold text-slate-900">{user.nome}</p>
-                          {user.is_master && (
-                            <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded flex items-center gap-1">
-                              <Crown className="w-3 h-3" />
-                              Master
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-600 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {user.email}
-                        </p>
-                        {user.telefone && (
-                          <p className="text-sm text-slate-600 flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {user.telefone}
-                          </p>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-slate-900">
+                          {user.nome}
+                        </h3>
+                        {user.is_master && (
+                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                            <Crown className="w-3 h-3" />
+                            Master
+                          </span>
                         )}
                       </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        user.ativo
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {user.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 text-sm text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4" />
+                        {user.email}
+                      </div>
+                      {user.telefone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          {user.telefone}
+                        </div>
+                      )}
+                      {user.endereco && (
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          {user.endereco}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <p className="text-xs text-slate-500">
+                        Cadastrado em {new Date(user.criado_em).toLocaleDateString('pt-BR')}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
