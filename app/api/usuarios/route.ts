@@ -83,7 +83,27 @@ async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
   return data
 }
 
+async function deletarUsuarioAuth(userId: string) {
+  try {
+    await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!
+        }
+      }
+    )
+    console.log('✅ Usuário deletado do Auth:', userId)
+  } catch (error) {
+    console.error('❌ Erro ao deletar do Auth:', error)
+  }
+}
+
 export async function POST(request: NextRequest) {
+  let authUserId: string | null = null
+
   try {
     const body = await request.json()
     const { email, senha, nome, telefone, endereco, token } = body
@@ -132,10 +152,23 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Iniciando cadastro:', email)
 
+    // 1. LIMPA registros incompletos primeiro
+    const { error: cleanupError } = await supabaseAdmin
+      .from('usuarios')
+      .delete()
+      .eq('email', email)
+      .is('nome', null)
+
+    if (cleanupError) {
+      console.warn('Aviso ao limpar registros:', cleanupError)
+    }
+
+    // 2. Verifica se email já existe (completo)
     const { data: emailExiste } = await supabaseAdmin
       .from('usuarios')
       .select('id')
       .eq('email', email)
+      .not('nome', 'is', null)
       .single()
 
     if (emailExiste) {
@@ -145,10 +178,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Gera hash da senha
+    // 3. Gera hash da senha
     const senhaHash = await bcrypt.hash(senha, 10)
     console.log('Senha hashada gerada')
 
+    // 4. Cria usuário no Auth
     let authData
     try {
       authData = await criarUsuarioViaAPI(email, senha, nome)
@@ -158,7 +192,7 @@ export async function POST(request: NextRequest) {
       if (error.message?.toLowerCase().includes('already') || 
           error.message?.toLowerCase().includes('exists')) {
         return NextResponse.json(
-          { erro: 'Este e-mail já está cadastrado no sistema' },
+          { erro: 'Este e-mail já está cadastrado no sistema de autenticação' },
           { status: 400 }
         )
       }
@@ -176,19 +210,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Usuário criado no Auth:', authData.id)
+    authUserId = authData.id
+    console.log('✅ Usuário criado no Auth:', authUserId)
 
-    // Insere na tabela usuarios COM senha_hash
+    // 5. Insere na tabela usuarios (com TODOS os campos)
     const { data: novoUsuario, error: insertError } = await supabaseAdmin
       .from('usuarios')
       .insert({
-        id: authData.id,
-        email,
-        nome,
-        telefone,
+        id: authUserId,
+        email: email,
+        nome: nome,
+        telefone: telefone,
         endereco: endereco || null,
-        senha_hash: senhaHash, // ADICIONA O HASH
+        senha_hash: senhaHash,
         is_master: false,
+        ativo: true
       })
       .select()
       .single()
@@ -196,20 +232,9 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('❌ Erro ao inserir na tabela:', insertError)
       
-      try {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${authData.id}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!
-            }
-          }
-        )
-        console.log('Usuário revertido do Auth')
-      } catch (deleteError) {
-        console.error('Erro ao reverter:', deleteError)
+      // REVERTE: deleta do Auth
+      if (authUserId) {
+        await deletarUsuarioAuth(authUserId)
       }
       
       return NextResponse.json(
@@ -218,8 +243,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Usuário salvo na tabela')
+    console.log('✅ Usuário salvo na tabela:', novoUsuario)
 
+    // 6. Envia email
     try {
       await enviarEmailBoasVindas(email, nome, senha)
       console.log('✅ Email enviado')
@@ -233,7 +259,13 @@ export async function POST(request: NextRequest) {
     }, { status: 201 })
 
   } catch (error: any) {
-    console.error('❌ Erro no POST /api/usuarios:', error)
+    console.error('❌ Erro geral no POST:', error)
+    
+    // Se deu erro e já criou no Auth, reverte
+    if (authUserId) {
+      await deletarUsuarioAuth(authUserId)
+    }
+    
     return NextResponse.json(
       { erro: error.message || 'Erro interno do servidor' },
       { status: 500 }
