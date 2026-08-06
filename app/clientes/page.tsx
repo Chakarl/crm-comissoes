@@ -47,16 +47,39 @@ export default function ClientesPage() {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
+  // ── Filtro por corretor (master only) ──
+  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
+  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
+
+  useEffect(() => {
+    if (usuario) {
+      if (usuario.is_master) carregarCorretores()
+      loadClientes()
+    }
+  }, [usuario])
+
+  // Recarrega quando muda o filtro de corretor
   useEffect(() => {
     if (usuario) loadClientes()
-  }, [usuario])
+  }, [corretorFiltro])
 
   useEffect(() => {
     setPagina(1)
   }, [search, mesFiltro])
 
+  const carregarCorretores = async () => {
+    const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
+    if (usuarios) {
+      const corretores = usuarios
+        .filter((u: any) => !u.is_master)
+        .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
+      setListaCorretores(corretores)
+    }
+  }
+
   const loadClientes = async () => {
     if (!usuario) return
+    setLoading(true)
 
     let queryClientes = supabase
       .from('clientes')
@@ -65,9 +88,9 @@ export default function ClientesPage() {
 
     if (!usuario.is_master) {
       queryClientes = queryClientes.eq('usuario_id', usuario.id)
+    } else if (corretorFiltro !== 'todos') {
+      queryClientes = queryClientes.eq('usuario_id', corretorFiltro)
     }
-
-    const { data: clientesData } = await queryClientes
 
     let queryPropostas = supabase
       .from('propostas')
@@ -75,8 +98,11 @@ export default function ClientesPage() {
 
     if (!usuario.is_master) {
       queryPropostas = queryPropostas.eq('usuario_id', usuario.id)
+    } else if (corretorFiltro !== 'todos') {
+      queryPropostas = queryPropostas.eq('usuario_id', corretorFiltro)
     }
 
+    const { data: clientesData } = await queryClientes
     const { data: propostasData } = await queryPropostas
 
     const mapaData: Record<string, string> = {}
@@ -156,6 +182,10 @@ export default function ClientesPage() {
     setDeletando(null)
   }
 
+  // Mapa de nomes dos corretores para exibição
+  const nomeCorretorMap: Record<string, string> = {}
+  listaCorretores.forEach((c) => { nomeCorretorMap[c.id] = c.nome })
+
   const datasDisponiveis = clientes
     .map((c) => c.ultimaProposta || '')
     .filter(Boolean)
@@ -204,6 +234,31 @@ export default function ClientesPage() {
           </button>
         </div>
 
+        {/* ── Filtro por Corretor (master only) ── */}
+        {usuario?.is_master && (
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <UsersIcon className="w-4 h-4 text-violet-500" />
+              <span className="font-medium">Corretor:</span>
+            </div>
+            <select
+              value={corretorFiltro}
+              onChange={(e) => {
+                setCorretorFiltro(e.target.value)
+                setPagina(1)
+              }}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="todos">Todos os Corretores</option>
+              {listaCorretores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Busca */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="relative">
@@ -236,6 +291,11 @@ export default function ClientesPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   CPF
                 </th>
+                {usuario?.is_master && corretorFiltro === 'todos' && (
+                  <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                    Corretor
+                  </th>
+                )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Telefone
                 </th>
@@ -260,6 +320,11 @@ export default function ClientesPage() {
                     {c.nome}
                   </td>
                   <td className="px-6 py-4 text-slate-700">{c.cpf || '—'}</td>
+                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                    <td className="px-6 py-4 text-slate-700">
+                      {c.usuario_id ? nomeCorretorMap[c.usuario_id] || '—' : '—'}
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-slate-700">
                     {c.telefone || '—'}
                   </td>
@@ -322,6 +387,11 @@ export default function ClientesPage() {
                 <div>
                   <div className="font-semibold text-slate-900">{c.nome}</div>
                   <div className="text-xs text-slate-500">{c.cpf || '—'}</div>
+                  {usuario?.is_master && corretorFiltro === 'todos' && c.usuario_id && (
+                    <div className="text-xs text-violet-600 mt-0.5">
+                      {nomeCorretorMap[c.usuario_id] || '—'}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <button
