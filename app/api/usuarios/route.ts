@@ -85,7 +85,7 @@ async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
 
 async function deletarUsuarioAuth(userId: string) {
   try {
-    await fetch(
+    const response = await fetch(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}`,
       {
         method: 'DELETE',
@@ -95,7 +95,12 @@ async function deletarUsuarioAuth(userId: string) {
         }
       }
     )
-    console.log('✅ Usuário deletado do Auth:', userId)
+    
+    if (response.ok) {
+      console.log('✅ Usuário deletado do Auth:', userId)
+    } else {
+      console.warn('⚠️ Falha ao deletar do Auth:', await response.text())
+    }
   } catch (error) {
     console.error('❌ Erro ao deletar do Auth:', error)
   }
@@ -152,23 +157,11 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Iniciando cadastro:', email)
 
-    // 1. LIMPA registros incompletos primeiro
-    const { error: cleanupError } = await supabaseAdmin
-      .from('usuarios')
-      .delete()
-      .eq('email', email)
-      .is('nome', null)
-
-    if (cleanupError) {
-      console.warn('Aviso ao limpar registros:', cleanupError)
-    }
-
-    // 2. Verifica se email já existe (completo)
+    // 1. Verifica se email já existe na tabela
     const { data: emailExiste } = await supabaseAdmin
       .from('usuarios')
-      .select('id')
+      .select('id, email')
       .eq('email', email)
-      .not('nome', 'is', null)
       .single()
 
     if (emailExiste) {
@@ -178,11 +171,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Gera hash da senha
+    // 2. Gera hash da senha
     const senhaHash = await bcrypt.hash(senha, 10)
     console.log('Senha hashada gerada')
 
-    // 4. Cria usuário no Auth
+    // 3. Cria usuário no Auth
     let authData
     try {
       authData = await criarUsuarioViaAPI(email, senha, nome)
@@ -213,7 +206,24 @@ export async function POST(request: NextRequest) {
     authUserId = authData.id
     console.log('✅ Usuário criado no Auth:', authUserId)
 
-    // 5. Insere na tabela usuarios (com TODOS os campos)
+    // 4. VERIFICAÇÃO ADICIONAL: Checa se esse ID já existe na tabela
+    const { data: idExiste } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('id', authUserId)
+      .single()
+
+    if (idExiste) {
+      console.error('❌ ID já existe na tabela! Deletando do Auth e abortando')
+      await deletarUsuarioAuth(authUserId)
+      
+      return NextResponse.json(
+        { erro: 'Conflito de ID detectado. Por favor, tente novamente.' },
+        { status: 409 }
+      )
+    }
+
+    // 5. Insere na tabela usuarios
     const { data: novoUsuario, error: insertError } = await supabaseAdmin
       .from('usuarios')
       .insert({
@@ -233,9 +243,7 @@ export async function POST(request: NextRequest) {
       console.error('❌ Erro ao inserir na tabela:', insertError)
       
       // REVERTE: deleta do Auth
-      if (authUserId) {
-        await deletarUsuarioAuth(authUserId)
-      }
+      await deletarUsuarioAuth(authUserId)
       
       return NextResponse.json(
         { erro: `Erro ao salvar dados: ${insertError.message}` },
@@ -259,9 +267,9 @@ export async function POST(request: NextRequest) {
     }, { status: 201 })
 
   } catch (error: any) {
-    console.error('❌ Erro geral no POST:', error)
+    console.error('❌ Erro no POST /api/usuarios:', error)
     
-    // Se deu erro e já criou no Auth, reverte
+    // Se criou no Auth mas falhou depois, tenta reverter
     if (authUserId) {
       await deletarUsuarioAuth(authUserId)
     }
