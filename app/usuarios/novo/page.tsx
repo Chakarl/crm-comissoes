@@ -38,7 +38,7 @@ export default function NovoUsuarioPage() {
   const [endereco, setEndereco] = useState('')
   const [senha, setSenha] = useState('')
   const [senhaCopied, setSenhaCopied] = useState(false)
-  const [erro, setErro] = useState('')
+  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     if (!loadingUser) {
@@ -93,12 +93,49 @@ export default function NovoUsuarioPage() {
     setLoading(false)
   }
 
+  const validarCampos = () => {
+    if (!nome.trim()) {
+      setErro('O campo Nome é obrigatório')
+      return false
+    }
+
+    if (!email.trim()) {
+      setErro('O campo Email é obrigatório')
+      return false
+    }
+
+    // Validação básica de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setErro('Digite um email válido')
+      return false
+    }
+
+    if (!telefone.trim()) {
+      setErro('O campo Telefone é obrigatório')
+      return false
+    }
+
+    // Validação do telefone formatado
+    const numeros = telefone.replace(/\D/g, '')
+    if (numeros.length < 10 || numeros.length > 11) {
+      setErro('Digite um telefone válido com DDD')
+      return false
+    }
+
+    if (!senha.trim() || senha.length < 6) {
+      setErro('A senha deve ter pelo menos 6 caracteres')
+      return false
+    }
+
+    return true
+  }
+
   const cadastrar = async (e: React.FormEvent) => {
     e.preventDefault()
-    setErro('')
+    setErro(null)
 
-    if (!nome.trim() || !email.trim() || !telefone.trim()) {
-      setErro('Preencha nome, email e telefone')
+    if (!validarCampos()) {
       return
     }
 
@@ -108,7 +145,11 @@ export default function NovoUsuarioPage() {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
 
-      if (!token) throw new Error('Sessão inválida')
+      if (!token) {
+        setErro('Sessão inválida. Faça login novamente.')
+        setSalvando(false)
+        return
+      }
 
       const res = await fetch('/api/usuarios', {
         method: 'POST',
@@ -117,7 +158,7 @@ export default function NovoUsuarioPage() {
           email, 
           senha, 
           nome,
-          telefone, // Já formatado com (00) 00000-0000
+          telefone,
           endereco: endereco.trim() || null,
           token 
         }),
@@ -126,7 +167,9 @@ export default function NovoUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.erro || 'Erro ao cadastrar')
+        setErro(data.erro || 'Erro ao cadastrar usuário')
+        setSalvando(false)
+        return
       }
 
       // Limpa formulário
@@ -135,7 +178,7 @@ export default function NovoUsuarioPage() {
       setTelefone('')
       setEndereco('')
       gerarSenha()
-      setErro('')
+      setErro(null)
 
       await carregarUsuarios()
       
@@ -144,7 +187,8 @@ export default function NovoUsuarioPage() {
       setTimeout(() => setShowPopup(false), 4000)
       
     } catch (err: any) {
-      setErro(err.message)
+      console.error('Erro ao cadastrar:', err)
+      setErro(err.message || 'Erro inesperado ao cadastrar')
     } finally {
       setSalvando(false)
     }
@@ -211,7 +255,6 @@ export default function NovoUsuarioPage() {
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="Ex: João Silva"
-                  required
                 />
               </div>
 
@@ -227,7 +270,6 @@ export default function NovoUsuarioPage() {
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="usuario@exemplo.com"
-                  required
                 />
               </div>
 
@@ -243,8 +285,6 @@ export default function NovoUsuarioPage() {
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="(11) 98765-4321"
-                  maxLength={15}
-                  required
                 />
               </div>
 
@@ -273,32 +313,31 @@ export default function NovoUsuarioPage() {
                     type="text"
                     value={senha}
                     readOnly
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono text-sm"
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono"
                   />
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors flex items-center gap-2"
+                    className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
                   >
                     {senhaCopied ? (
                       <>
                         <Check className="w-4 h-4 text-green-600" />
-                        <span className="text-sm text-green-600">Copiado!</span>
+                        Copiado!
                       </>
                     ) : (
                       <>
                         <Copy className="w-4 h-4" />
-                        <span className="text-sm">Copiar</span>
+                        Copiar
                       </>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={gerarSenha}
-                    disabled={salvando}
-                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
                   >
-                    🔄 Nova
+                    Nova
                   </button>
                 </div>
               </div>
@@ -306,7 +345,7 @@ export default function NovoUsuarioPage() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {salvando ? (
                   <>
