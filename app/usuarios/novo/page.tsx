@@ -131,68 +131,83 @@ export default function NovoUsuarioPage() {
     return true
   }
 
-  const cadastrar = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro(null)
+ ' const cadastrar = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setErro(null)
 
-    if (!validarCampos()) {
+  console.log('🔍 Validando campos...')
+  
+  if (!validarCampos()) {
+    console.log('❌ Validação falhou')
+    return
+  }
+
+  console.log('✅ Validação OK')
+  setSalvando(true)
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+
+    console.log('🔑 Token:', token ? 'Presente' : 'Ausente')
+
+    if (!token) {
+      setErro('Sessão inválida. Faça login novamente.')
+      setSalvando(false)
       return
     }
 
-    setSalvando(true)
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
-      if (!token) {
-        setErro('Sessão inválida. Faça login novamente.')
-        setSalvando(false)
-        return
-      }
-
-      const res = await fetch('/api/usuarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email, 
-          senha, 
-          nome,
-          telefone,
-          endereco: endereco.trim() || null,
-          token 
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setErro(data.erro || 'Erro ao cadastrar usuário')
-        setSalvando(false)
-        return
-      }
-
-      // Limpa formulário
-      setNome('')
-      setEmail('')
-      setTelefone('')
-      setEndereco('')
-      gerarSenha()
-      setErro(null)
-
-      await carregarUsuarios()
-      
-      // Mostra popup de sucesso
-      setShowPopup(true)
-      setTimeout(() => setShowPopup(false), 4000)
-      
-    } catch (err: any) {
-      console.error('Erro ao cadastrar:', err)
-      setErro(err.message || 'Erro inesperado ao cadastrar')
-    } finally {
-      setSalvando(false)
+    const payload = { 
+      email, 
+      senha, 
+      nome,
+      telefone,
+      endereco: endereco.trim() || null,
+      token 
     }
+
+    console.log('📤 Enviando:', payload)
+
+    const res = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    console.log('📥 Status da resposta:', res.status)
+
+    const data = await res.json()
+    console.log('📥 Dados da resposta:', data)
+
+    if (!res.ok) {
+      setErro(data.erro || 'Erro ao cadastrar usuário')
+      setSalvando(false)
+      return
+    }
+
+    console.log('✅ Cadastro concluído com sucesso!')
+
+    // Limpa formulário
+    setNome('')
+    setEmail('')
+    setTelefone('')
+    setEndereco('')
+    gerarSenha()
+    setErro(null)
+
+    await carregarUsuarios()
+    
+    // Mostra popup de sucesso
+    setShowPopup(true)
+    setTimeout(() => setShowPopup(false), 4000)
+    
+  } catch (err: any) {
+    console.error('❌ Erro no catch:', err)
+    setErro(err.message || 'Erro inesperado ao cadastrar')
+  } finally {
+    setSalvando(false)
   }
+}'
 
   if (loadingUser || loading) {
     return (

@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import bcrypt from 'bcryptjs'
 import { enviarEmailBoasVindas } from '@/lib/email'
 
 const supabaseAdmin = createClient(
@@ -14,83 +13,130 @@ const supabaseAdmin = createClient(
   }
 )
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { email, senha, nome, token } = await request.json()
+    const body = await request.json()
+    console.log('📥 Body recebido:', body)
 
-    if (!email || !senha || !nome || !token) {
-      return NextResponse.json({ erro: 'Dados incompletos' }, { status: 400 })
+    const { email, senha, nome, telefone, endereco, token } = body
+
+    // Validação
+    if (!email || !senha || !nome || !telefone) {
+      return NextResponse.json(
+        { erro: 'Campos obrigatórios: email, senha, nome, telefone' },
+        { status: 400 }
+      )
     }
 
-    // Valida token do Supabase Auth
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    // Verificar token
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
     if (authError || !user) {
-      return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
+      console.error('❌ Erro de autenticação:', authError)
+      return NextResponse.json(
+        { erro: 'Token inválido ou expirado' },
+        { status: 401 }
+      )
     }
 
-    // Verifica se é master
-    const { data: usuarioLogado } = await supabaseAdmin
+    // Verificar se é master
+    const { data: usuarioLogado, error: usuarioError } = await supabaseAdmin
       .from('usuarios')
       .select('is_master')
       .eq('id', user.id)
       .single()
 
-    if (!usuarioLogado?.is_master) {
-      return NextResponse.json({ erro: 'Apenas o master pode criar usuários' }, { status: 403 })
+    if (usuarioError || !usuarioLogado?.is_master) {
+      console.error('❌ Usuário não é master:', usuarioError)
+      return NextResponse.json(
+        { erro: 'Acesso negado. Apenas usuários master podem cadastrar.' },
+        { status: 403 }
+      )
     }
 
-    const senhaHash = await bcrypt.hash(senha, 10)
+    console.log('✅ Usuário master verificado:', user.id)
 
-    // 1. Cria o usuário no Auth
-    const { data: authUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    // Criar usuário no Supabase Auth
+    const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
       email_confirm: true,
-      user_metadata: { nome }
     })
 
-    if (createError) {
-      if (createError.message.includes('already been registered')) {
-        return NextResponse.json({ erro: 'Email já cadastrado' }, { status: 400 })
+    if (createAuthError) {
+      console.error('❌ Erro ao criar usuário no Auth:', createAuthError)
+      
+      if (createAuthError.message.includes('already registered')) {
+        return NextResponse.json(
+          { erro: 'Este email já está cadastrado no sistema' },
+          { status: 400 }
+        )
       }
-      throw createError
+      
+      return NextResponse.json(
+        { erro: `Erro ao criar usuário: ${createAuthError.message}` },
+        { status: 500 }
+      )
     }
 
-    // 2. Insere na tabela usuarios
-    const { data, error: dbError } = await supabaseAdmin
+    console.log('✅ Usuário criado no Auth:', authData.user.id)
+
+    // Inserir na tabela usuarios
+    const { data: novoUsuario, error: insertError } = await supabaseAdmin
       .from('usuarios')
       .insert({
-        id: authUser.user.id,
+        id: authData.user.id,
         email,
-        senha_hash: senhaHash,
         nome,
+        telefone,
+        endereco,
         is_master: false,
-        criado_por: user.id
       })
       .select()
       .single()
 
-    if (dbError) {
-      // Rollback: deleta do Auth
-      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
-
-      if (dbError.code === '23505') {
-        return NextResponse.json({ erro: 'Email já cadastrado' }, { status: 400 })
-      }
-      throw dbError
+    if (insertError) {
+      console.error('❌ Erro ao inserir na tabela usuarios:', insertError)
+      
+      // Tentar deletar o usuário do Auth se falhar
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+      
+      return NextResponse.json(
+        { erro: `Erro ao salvar dados: ${insertError.message}` },
+        { status: 500 }
+      )
     }
 
-    const { senha_hash, ...usuarioSeguro } = data
-    return NextResponse.json(usuarioSeguro)
+    console.log('✅ Usuário salvo na tabela:', novoUsuario.id)
+
+    // Enviar email
+    try {
+      await enviarEmailBoasVindas(email, nome, senha)
+      console.log('✅ Email enviado para:', email)
+    } catch (emailError) {
+      console.error('⚠️ Erro ao enviar email (não crítico):', emailError)
+    }
+
+    return NextResponse.json({ 
+      sucesso: true, 
+      usuario: novoUsuario 
+    })
 
   } catch (error: any) {
-    console.error('❌ Erro ao criar usuário:', error)
-    return NextResponse.json({ erro: error.message || 'Erro no servidor' }, { status: 500 })
+    console.error('❌ Erro geral:', error)
+    return NextResponse.json(
+      { erro: error.message || 'Erro interno no servidor' },
+      { status: 500 }
+    )
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const token = searchParams.get('token')
@@ -99,34 +145,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ erro: 'Token não fornecido' }, { status: 401 })
     }
 
-    // Valida token
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
     if (authError || !user) {
       return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
     }
 
-    // Verifica se é master
-    const { data: usuarioLogado } = await supabaseAdmin
+    const { data: usuarios, error } = await supabaseAdmin
       .from('usuarios')
-      .select('is_master')
-      .eq('id', user.id)
-      .single()
+      .select('*')
+      .order('created_at', { ascending: false })
 
-    if (!usuarioLogado?.is_master) {
-      return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
+    if (error) {
+      console.error('Erro ao buscar usuários:', error)
+      return NextResponse.json({ erro: error.message }, { status: 500 })
     }
 
-    // Lista todos os usuários
-    const { data: usuarios } = await supabaseAdmin
-      .from('usuarios')
-      .select('id, email, nome, telefone, endereco, is_master, ativo, criado_em')
-      .order('criado_em', { ascending: false })
-
-    return NextResponse.json(usuarios || [])
+    return NextResponse.json(usuarios)
 
   } catch (error: any) {
-    console.error('❌ Erro ao listar usuários:', error)
-    return NextResponse.json({ erro: error.message || 'Erro no servidor' }, { status: 500 })
+    console.error('Erro geral no GET:', error)
+    return NextResponse.json({ erro: error.message }, { status: 500 })
   }
 }
