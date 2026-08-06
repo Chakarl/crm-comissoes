@@ -119,10 +119,10 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
         </div>
       </div>
 
-      {/* ——— Linha 2: Navegação — desktop ——— */}
+      {/* ——— Linha 2: Navegação centralizada — desktop ——— */}
       <div className="hidden lg:block border-t border-slate-800 bg-slate-900/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center gap-1 h-12">
+          <div className="flex items-center justify-center gap-1 h-12">
             {links.map((link) => {
               const Icon = link.icon
               const isActive = pathname === link.href
@@ -130,7 +130,7 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                  className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors
                     ${
                       isActive
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
