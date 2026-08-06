@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
-      email_confirm: true, // Confirma automaticamente (funciona se "Secure email change" estiver desabilitado)
+      email_confirm: true, // Confirma automaticamente
       user_metadata: { 
         nome 
       }

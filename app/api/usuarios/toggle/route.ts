@@ -1,44 +1,106 @@
-import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-export async function PATCH(request: Request) {
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+)
+
+export async function PATCH(request: NextRequest) {
   try {
-    const { id, ativo, token } = await request.json()
+    const body = await request.json()
+    const { id, ativo, token } = body
 
+    // Valida dados obrigatórios
     if (!id || ativo === undefined || !token) {
-      return NextResponse.json({ erro: 'Dados incompletos' }, { status: 400 })
+      return NextResponse.json(
+        { erro: 'Campos obrigatórios: id, ativo, token' },
+        { status: 400 }
+      )
     }
 
-    const { data: sessao } = await supabaseAdmin
-      .from('sessoes')
-      .select('usuario_id')
-      .eq('token', token)
-      .gte('expira_em', new Date().toISOString())
-      .single()
+    // Cria cliente Supabase com chave anon
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
-    if (!sessao) {
-      return NextResponse.json({ erro: 'Sessão inválida' }, { status: 401 })
+    // Valida o token e obtém o usuário logado
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { erro: 'Sessão inválida ou expirada' },
+        { status: 401 }
+      )
     }
 
-    const { data: usuario } = await supabaseAdmin
+    console.log('Usuário autenticado:', user.id)
+
+    // Verifica se o usuário logado é master
+    const { data: usuarioLogado, error: usuarioError } = await supabaseAdmin
       .from('usuarios')
       .select('is_master')
-      .eq('id', sessao.usuario_id)
+      .eq('id', user.id)
       .single()
 
-    if (!usuario?.is_master) {
-      return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
+    if (usuarioError) {
+      console.error('Erro ao verificar permissões:', usuarioError)
+      return NextResponse.json(
+        { erro: `Erro ao verificar permissões: ${usuarioError.message}` },
+        { status: 500 }
+      )
     }
 
-    await supabaseAdmin
+    if (!usuarioLogado?.is_master) {
+      return NextResponse.json(
+        { erro: 'Apenas usuários master podem ativar/desativar usuários' },
+        { status: 403 }
+      )
+    }
+
+    // Não permite desativar o próprio usuário
+    if (id === user.id) {
+      return NextResponse.json(
+        { erro: 'Você não pode desativar sua própria conta' },
+        { status: 400 }
+      )
+    }
+
+    console.log(`Alterando usuário ${id} para ativo=${ativo}`)
+
+    // Atualiza o status do usuário
+    const { error: updateError } = await supabaseAdmin
       .from('usuarios')
       .update({ ativo })
       .eq('id', id)
 
-    return NextResponse.json({ sucesso: true })
+    if (updateError) {
+      console.error('Erro ao atualizar usuário:', updateError)
+      return NextResponse.json(
+        { erro: `Erro ao atualizar usuário: ${updateError.message}` },
+        { status: 500 }
+      )
+    }
 
-  } catch (error) {
-    console.error('Erro ao atualizar usuário:', error)
-    return NextResponse.json({ erro: 'Erro no servidor' }, { status: 500 })
+    console.log(`✅ Usuário ${id} ${ativo ? 'ativado' : 'desativado'}`)
+
+    return NextResponse.json({ 
+      sucesso: true,
+      mensagem: `Usuário ${ativo ? 'ativado' : 'desativado'} com sucesso`
+    })
+
+  } catch (error: any) {
+    console.error('❌ Erro no PATCH /api/usuarios/toggle:', error)
+    return NextResponse.json(
+      { erro: error.message || 'Erro interno do servidor' },
+      { status: 500 }
+    )
   }
 }

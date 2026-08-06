@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
-import { UserPlus, User, Mail, Phone, MapPin, Lock, Copy, Check, AlertCircle, Loader2, Crown, Trash2 } from 'lucide-react'
+import { UserPlus, User, Mail, Phone, MapPin, Lock, Copy, Check, AlertCircle, Loader2, Crown, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function NovoUsuarioPage() {
@@ -51,124 +51,149 @@ export default function NovoUsuarioPage() {
     setTimeout(() => setSenhaCopied(false), 2000)
   }
 
-  // Máscara de telefone brasileira
   const formatarTelefone = (valor: string) => {
     const numero = valor.replace(/\D/g, '')
     
-    if (numero.length === 0) return ''
-    if (numero.length <= 2) return `(${numero}`
-    if (numero.length <= 6) return `(${numero.slice(0, 2)}) ${numero.slice(2)}`
-    if (numero.length <= 10) return `(${numero.slice(0, 2)}) ${numero.slice(2, 6)}-${numero.slice(6)}`
+    if (numero.length <= 10) {
+      return numero
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+    }
     
-    return `(${numero.slice(0, 2)}) ${numero.slice(2, 7)}-${numero.slice(7, 11)}`
+    return numero
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d)/, '$1-$2')
+      .slice(0, 15)
   }
 
   const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatarTelefone(e.target.value)
-    setTelefone(formatted)
+    setTelefone(formatarTelefone(e.target.value))
   }
 
   const obterToken = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
-        return session.access_token
-      }
-
-      const { data: { session: refreshedSession }, error } = await supabase.auth.refreshSession()
-      if (error) throw error
-      
-      return refreshedSession?.access_token || null
-    } catch (error) {
-      console.error('Erro ao obter token:', error)
-      return null
-    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Sessão expirada')
+    return session.access_token
   }
 
   const carregarUsuarios = async () => {
-    setLoading(true)
-    setErro('')
-
     try {
+      setLoading(true)
       const token = await obterToken()
-
-      if (!token) {
-        setErro('Sessão expirada. Faça login novamente.')
-        setLoading(false)
-        return
-      }
-
+      
       const res = await fetch(`/api/usuarios?token=${encodeURIComponent(token)}`)
       
       if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.erro || 'Erro ao carregar usuários')
+        throw new Error('Erro ao carregar usuários')
       }
 
       const data = await res.json()
       setUsuarios(data)
-    } catch (err: any) {
-      console.error('Erro ao carregar usuários:', err)
-      setErro(err.message || 'Erro ao carregar lista de usuários')
+    } catch (error: any) {
+      console.error('Erro ao carregar usuários:', error)
+      setErro(error.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const cadastrar = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro('')
-
-    if (!nome.trim() || !email.trim() || !telefone.trim()) {
-      setErro('Preencha nome, email e telefone')
-      return
-    }
-
-    setSalvando(true)
-
+  const alternarAtivo = async (userId: string, statusAtual: boolean) => {
     try {
+      setErro('')
       const token = await obterToken()
-
-      if (!token) {
-        throw new Error('Sessão expirada. Faça login novamente.')
-      }
-
-      const res = await fetch('/api/usuarios', {
-        method: 'POST',
+      
+      const res = await fetch('/api/usuarios/toggle', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          senha,
-          nome: nome.trim(),
-          telefone: telefone.trim(),
-          endereco: endereco.trim() || null,
-          token
-        }),
+        body: JSON.stringify({ 
+          id: userId, 
+          ativo: !statusAtual,
+          token 
+        })
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.erro || `Erro ${res.status}`)
+        throw new Error(data.erro || 'Erro ao alterar status')
       }
 
-      // Limpa formulário
+      setUsuarios(prev => 
+        prev.map(u => 
+          u.id === userId 
+            ? { ...u, ativo: !statusAtual } 
+            : u
+        )
+      )
+
+      console.log('✅', data.mensagem)
+
+    } catch (error: any) {
+      console.error('Erro ao alterar status:', error)
+      setErro(error.message)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!nome.trim() || !email.trim() || !telefone.trim() || !senha.trim()) {
+      setErro('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setErro('E-mail inválido')
+      return
+    }
+
+    const telefoneNumeros = telefone.replace(/\D/g, '')
+    if (telefoneNumeros.length < 10) {
+      setErro('Telefone inválido')
+      return
+    }
+
+    try {
+      setSalvando(true)
+      setErro('')
+
+      const token = await obterToken()
+
+      const res = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: nome.trim(),
+          email: email.trim().toLowerCase(),
+          telefone: telefoneNumeros,
+          endereco: endereco.trim() || null,
+          senha,
+          token
+        })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.erro || 'Erro ao cadastrar usuário')
+      }
+
+      setShowPopup(true)
+      
       setNome('')
       setEmail('')
       setTelefone('')
       setEndereco('')
       gerarSenha()
-      setErro('')
-
+      
       await carregarUsuarios()
-     
-      // Popup de sucesso
-      setShowPopup(true)
-      setTimeout(() => setShowPopup(false), 4000)
-     
-    } catch (err: any) {
-      console.error('Erro ao cadastrar:', err)
-      setErro(err.message || 'Erro desconhecido')
+
+      setTimeout(() => setShowPopup(false), 5000)
+
+    } catch (error: any) {
+      console.error('Erro ao cadastrar:', error)
+      setErro(error.message)
     } finally {
       setSalvando(false)
     }
@@ -176,156 +201,154 @@ export default function NovoUsuarioPage() {
 
   if (loadingUser || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
       </div>
     )
   }
 
-  if (!usuario?.is_master) return null
-
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      {/* Popup de Sucesso */}
-      {showPopup && (
-        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 z-50 animate-in slide-in-from-top">
-          <Check className="w-6 h-6" />
-          <div>
-            <p className="font-semibold">✅ Usuário cadastrado!</p>
-            <p className="text-sm opacity-90">Email enviado com credenciais</p>
-          </div>
-        </div>
-      )}
-
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             <UserPlus className="w-8 h-8 text-blue-600" />
-            Gerenciar Usuários
+            Cadastrar Novo Usuário
           </h1>
-          <p className="text-slate-600 mt-2">Cadastre novos corretores no sistema</p>
+          <p className="text-slate-600 mt-2">
+            Crie credenciais de acesso para novos usuários do sistema
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid lg:grid-cols-2 gap-6">
           {/* Formulário */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-blue-600" />
-              Novo Usuário
+            <h2 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-2">
+              <User className="w-5 h-5 text-blue-600" />
+              Dados do Usuário
             </h2>
 
-            <form onSubmit={cadastrar} className="space-y-4">
-              {erro && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-medium">{erro}</span>
-                </div>
-              )}
+            {erro && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2 mb-6">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <span className="text-sm font-medium">{erro}</span>
+              </div>
+            )}
 
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                  <User className="w-4 h-4" />
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Nome Completo *
                 </label>
                 <input
                   type="text"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="Digite o nome completo"
                   disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="Ex: João Silva"
-                  required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  Email *
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  E-mail *
                 </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="email@exemplo.com"
-                  required
-                />
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-11 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="email@exemplo.com"
+                    disabled={salvando}
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Telefone *
                 </label>
-                <input
-                  type="tel"
-                  value={telefone}
-                  onChange={handleTelefoneChange}
-                  disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="(00) 00000-0000"
-                  maxLength={15}
-                  required
-                />
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="tel"
+                    value={telefone}
+                    onChange={handleTelefoneChange}
+                    className="w-full pl-11 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="(11) 98765-4321"
+                    disabled={salvando}
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  Endereço (opcional)
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Endereço
                 </label>
-                <input
-                  type="text"
-                  value={endereco}
-                  onChange={(e) => setEndereco(e.target.value)}
-                  disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="Rua, número, bairro"
-                />
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                  <textarea
+                    value={endereco}
+                    onChange={(e) => setEndereco(e.target.value)}
+                    className="w-full pl-11 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                    placeholder="Rua, número, bairro, cidade"
+                    rows={2}
+                    disabled={salvando}
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                  <Lock className="w-4 h-4" />
-                  Senha Gerada
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Senha Gerada *
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={senha}
-                    readOnly
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono text-sm"
-                  />
+                  <div className="relative flex-1">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={senha}
+                      readOnly
+                      className="w-full pl-11 pr-4 py-2.5 border border-slate-300 rounded-lg bg-slate-50 font-mono text-sm"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                    title="Copiar senha"
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors flex items-center gap-2"
                   >
                     {senhaCopied ? (
-                      <Check className="w-4 h-4 text-green-600" />
+                      <>
+                        <Check className="w-4 h-4 text-green-600" />
+                        <span className="text-sm font-medium">Copiado!</span>
+                      </>
                     ) : (
-                      <Copy className="w-4 h-4 text-slate-600" />
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span className="text-sm font-medium">Copiar</span>
+                      </>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={gerarSenha}
-                    disabled={salvando}
-                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
                   >
                     Nova
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  A senha será enviada por e-mail automaticamente
+                </p>
               </div>
 
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors disabled:bg-blue-300 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {salvando ? (
                   <>
@@ -345,7 +368,7 @@ export default function NovoUsuarioPage() {
           {/* Lista de Usuários */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <User className="w-5 h-5 text-slate-600" />
+              <Crown className="w-5 h-5 text-amber-500" />
               Usuários Cadastrados ({usuarios.length})
             </h2>
 
@@ -353,45 +376,102 @@ export default function NovoUsuarioPage() {
               {usuarios.map((u) => (
                 <div
                   key={u.id}
-                  className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                  className={`p-4 rounded-lg border transition-all ${
+                    u.ativo
+                      ? 'bg-white border-slate-200'
+                      : 'bg-slate-50 border-slate-300 opacity-60'
+                  }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-slate-900">{u.nome}</p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <p className="font-medium text-slate-900 truncate">{u.nome}</p>
                         {u.is_master && (
-                          <Crown className="w-4 h-4 text-yellow-500" title="Master" />
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full">
+                            MASTER
+                          </span>
+                        )}
+                        {!u.ativo && (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
+                            INATIVO
+                          </span>
                         )}
                       </div>
-                      <p className="text-sm text-slate-600 flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        {u.email}
-                      </p>
-                      <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
-                        <Phone className="w-3 h-3" />
-                        {u.telefone}
-                      </p>
-                      {u.endereco && (
-                        <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-                          <MapPin className="w-3 h-3" />
-                          {u.endereco}
+                      
+                      <div className="space-y-1 text-sm text-slate-600">
+                        <p className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{u.email}</span>
                         </p>
-                      )}
+                        <p className="flex items-center gap-2">
+                          <Phone className="w-4 h-4 flex-shrink-0" />
+                          {u.telefone}
+                        </p>
+                        {u.endereco && (
+                          <p className="flex items-start gap-2">
+                            <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span className="break-words">{u.endereco}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Botão de toggle - só aparece se não for master nem o próprio usuário */}
+                    {!u.is_master && u.id !== usuario?.id && (
+                      <button
+                        onClick={() => alternarAtivo(u.id, u.ativo)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          u.ativo
+                            ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                            : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                        }`}
+                        title={u.ativo ? 'Desativar usuário' : 'Ativar usuário'}
+                      >
+                        {u.ativo ? (
+                          <>
+                            <ToggleRight className="w-5 h-5" />
+                            Desativar
+                          </>
+                        ) : (
+                          <>
+                            <ToggleLeft className="w-5 h-5" />
+                            Ativar
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
-
-              {usuarios.length === 0 && !loading && (
-                <div className="text-center py-12 text-slate-500">
-                  <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>Nenhum usuário cadastrado ainda</p>
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Popup de Sucesso */}
+      {showPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 animate-in fade-in zoom-in duration-300">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900">
+                Usuário Cadastrado!
+              </h3>
+              <p className="text-slate-600">
+                As credenciais foram enviadas por e-mail para <strong>{email}</strong>
+              </p>
+              <button
+                onClick={() => setShowPopup(false)}
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
