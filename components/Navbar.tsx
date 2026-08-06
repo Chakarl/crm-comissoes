@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   FileText,
   Users,
+  Bell,
   UserPlus,
   BarChart3,
   LogOut,
@@ -29,7 +30,10 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/propostas', label: 'Propostas', icon: FileText },
     { href: '/clientes', label: 'Clientes', icon: Users },
-    ...(isMaster ? [{ href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }] : []),
+    // Master: Cadastrar Usuário | Corretor: Alertas de Renovação
+    isMaster
+      ? { href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }
+      : { href: '/renovacoes', label: 'Alertas de Renovação', icon: Bell },
     { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   ]
 
