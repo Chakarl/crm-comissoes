@@ -90,7 +90,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   console.log('=== INÍCIO POST /api/usuarios ===')
   
-  // Verificação de variáveis de ambiente
   console.log('🔑 Verificando variáveis de ambiente...')
   console.log('   NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'OK' : '❌ FALTANDO')
   console.log('   NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : '❌ FALTANDO')
@@ -165,7 +164,6 @@ export async function POST(request: NextRequest) {
     console.log('   Email:', email)
     console.log('   Senha tem:', senha.length, 'caracteres')
 
-    // Tentativa 1: com email_confirm
     let authData: any = null
     let createAuthError: any = null
 
@@ -183,7 +181,6 @@ export async function POST(request: NextRequest) {
     authData = resultado1.data
     createAuthError = resultado1.error
 
-    // Se der erro vazio, tenta sem email_confirm
     if (createAuthError && (!createAuthError.message || createAuthError.message === '{}')) {
       console.log('⚠️ Erro vazio detectado. Tentando sem email_confirm...')
       
@@ -210,7 +207,6 @@ export async function POST(request: NextRequest) {
       console.log('✅ Usuário criado na segunda tentativa (sem email_confirm)')
     }
 
-    // Se ainda houver erro, retorna
     if (createAuthError) {
       console.error('❌ ERRO ao criar no Auth:', createAuthError)
       console.error('   Mensagem:', createAuthError.message)
