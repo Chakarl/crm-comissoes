@@ -41,14 +41,15 @@ export default function NovoUsuarioPage() {
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!loadingUser) {
-      if (!usuario?.is_master) {
-        router.push('/dashboard')
-      } else {
-        carregarUsuarios()
-        gerarSenha()
-      }
+  if (!loadingUser) {
+    if (!usuario?.is_master) {
+      router.push('/dashboard')
+    } else {
+      console.log('👤 Usuário master detectado, carregando lista...')
+      gerarSenha()
+      carregarUsuarios()
     }
+  }
   }, [loadingUser, usuario, router])
 
   const gerarSenha = () => {
@@ -73,24 +74,41 @@ export default function NovoUsuarioPage() {
   }
 
   const carregarUsuarios = async () => {
+  try {
     setLoading(true)
+    console.log('🔄 Carregando usuários...')
     
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
+    console.log('🔑 Token:', token ? 'OK' : 'Ausente')
+
     if (!token) {
+      console.error('❌ Sem token')
       setLoading(false)
       return
     }
 
     const res = await fetch(`/api/usuarios?token=${token}`)
+    console.log('📥 Status da resposta:', res.status)
+
     const data = await res.json()
+    console.log('📥 Dados recebidos:', data)
     
-    if (res.ok) {
+    if (res.ok && Array.isArray(data)) {
       setUsuarios(data)
+      console.log(`✅ ${data.length} usuários carregados`)
+    } else {
+      console.error('❌ Erro ao carregar:', data)
+      setUsuarios([])
     }
     
+  } catch (error) {
+    console.error('❌ Erro no carregamento:', error)
+    setUsuarios([])
+  } finally {
     setLoading(false)
+  }
   }
 
   const validarCampos = () => {
