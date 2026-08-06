@@ -114,6 +114,7 @@ export default function NovoUsuarioPage() {
       setTelefone('')
       setEndereco('')
       gerarSenha()
+      setErro('')
 
       await carregarUsuarios()
       
@@ -173,7 +174,7 @@ export default function NovoUsuarioPage() {
               {erro && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">{erro}</span>
+                  <span className="text-sm font-medium">{erro}</span>
                 </div>
               )}
 
@@ -189,6 +190,7 @@ export default function NovoUsuarioPage() {
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="Ex: João Silva"
+                  required
                 />
               </div>
 
@@ -204,6 +206,7 @@ export default function NovoUsuarioPage() {
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="usuario@exemplo.com"
+                  required
                 />
               </div>
 
@@ -219,6 +222,7 @@ export default function NovoUsuarioPage() {
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="(11) 98765-4321"
+                  required
                 />
               </div>
 
@@ -237,7 +241,6 @@ export default function NovoUsuarioPage() {
                 />
               </div>
 
-              {/* Senha Gerada */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
                   <Lock className="w-4 h-4" />
@@ -248,12 +251,12 @@ export default function NovoUsuarioPage() {
                     type="text"
                     value={senha}
                     readOnly
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono text-lg tracking-wider"
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono"
                   />
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors"
+                    className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
                     title="Copiar senha"
                   >
                     {senhaCopied ? (
@@ -265,12 +268,13 @@ export default function NovoUsuarioPage() {
                   <button
                     type="button"
                     onClick={gerarSenha}
-                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors text-sm font-medium"
+                    disabled={salvando}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300"
                   >
                     Gerar Nova
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-2">
                   A senha será enviada por email para o usuário
                 </p>
               </div>
@@ -278,7 +282,7 @@ export default function NovoUsuarioPage() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
                 {salvando ? (
                   <>
@@ -302,59 +306,61 @@ export default function NovoUsuarioPage() {
               Usuários Cadastrados ({usuarios.length})
             </h2>
 
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {usuarios.length === 0 ? (
                 <p className="text-slate-500 text-center py-8">
                   Nenhum usuário cadastrado ainda
                 </p>
               ) : (
-                usuarios.map((u) => (
+                usuarios.map((user) => (
                   <div
-                    key={u.id}
-                    className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                    key={user.id}
+                    className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold text-slate-900">{u.nome}</p>
-                          {u.is_master && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">
-                              <Crown className="w-3 h-3" />
-                              Master
-                            </span>
-                          )}
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-slate-900">
+                          {user.nome}
+                        </h3>
+                        {user.is_master && (
+                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                            <Crown className="w-3 h-3" />
+                            Master
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        user.ativo
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {user.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 text-sm text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4" />
+                        {user.email}
+                      </div>
+                      {user.telefone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          {user.telefone}
                         </div>
-                        <p className="text-sm text-slate-600 flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5" />
-                          {u.email}
-                        </p>
-                        {u.telefone && (
-                          <p className="text-sm text-slate-600 flex items-center gap-1.5 mt-1">
-                            <Phone className="w-3.5 h-3.5" />
-                            {u.telefone}
-                          </p>
-                        )}
-                        {u.endereco && (
-                          <p className="text-sm text-slate-600 flex items-center gap-1.5 mt-1">
-                            <MapPin className="w-3.5 h-3.5" />
-                            {u.endereco}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span
-                          className={`inline-block px-2 py-1 text-xs font-medium rounded ${
-                            u.ativo
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {u.ativo ? 'Ativo' : 'Inativo'}
-                        </span>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {new Date(u.criado_em).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
+                      )}
+                      {user.endereco && (
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          {user.endereco}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <p className="text-xs text-slate-500">
+                        Cadastrado em {new Date(user.criado_em).toLocaleDateString('pt-BR')}
+                      </p>
                     </div>
                   </div>
                 ))
