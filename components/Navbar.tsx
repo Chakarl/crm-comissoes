@@ -39,7 +39,7 @@ function getPrimeiroNome(nome: string): string {
   return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase()
 }
 
-export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
+export default function Navbar({ userName, isMaster, userRole, onLogout }: NavbarProps) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const [saudacao, setSaudacao] = useState(getSaudacao())
