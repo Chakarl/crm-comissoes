@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Navbar from '@/components/Navbar' // ← mudou aqui (caminho absoluto)
+import Navbar from '@/components/Navbar'
 import './globals.css'
 
 export default function RootLayout({
@@ -15,12 +15,25 @@ export default function RootLayout({
   const pathname = usePathname()
   const supabase = createClient()
   const [user, setUser] = useState<any>(null)
+  const [isMaster, setIsMaster] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user || null)
+
+      if (session?.user) {
+        // Busca is_master da tabela usuarios
+        const { data: userData } = await supabase
+          .from('usuarios')
+          .select('is_master')
+          .eq('id', session.user.id)
+          .single()
+
+        setIsMaster(userData?.is_master || false)
+      }
+
       setLoading(false)
 
       if (!session && pathname !== '/login') {
@@ -31,8 +44,21 @@ export default function RootLayout({
     checkUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         setUser(session?.user || null)
+
+        if (session?.user) {
+          const { data: userData } = await supabase
+            .from('usuarios')
+            .select('is_master')
+            .eq('id', session.user.id)
+            .single()
+
+          setIsMaster(userData?.is_master || false)
+        } else {
+          setIsMaster(false)
+        }
+
         if (!session && pathname !== '/login') {
           router.push('/login')
         }
@@ -67,6 +93,7 @@ export default function RootLayout({
         {!isLoginPage && user && (
           <Navbar 
             userName={user.email || 'Usuário'} 
+            isMaster={isMaster}
             onLogout={handleLogout} 
           />
         )}

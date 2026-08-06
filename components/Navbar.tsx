@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   FileText,
   Users,
-  Bell,
+  UserPlus,
   BarChart3,
   LogOut,
   Menu,
@@ -17,10 +17,11 @@ import { useState } from 'react'
 
 interface NavbarProps {
   userName: string
+  isMaster: boolean
   onLogout: () => void
 }
 
-export default function Navbar({ userName, onLogout }: NavbarProps) {
+export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -28,7 +29,7 @@ export default function Navbar({ userName, onLogout }: NavbarProps) {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/propostas', label: 'Propostas', icon: FileText },
     { href: '/clientes', label: 'Clientes', icon: Users },
-    { href: '/renovacoes', label: 'Alertas de Renovação', icon: Bell },
+    ...(isMaster ? [{ href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }] : []),
     { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   ]
 
