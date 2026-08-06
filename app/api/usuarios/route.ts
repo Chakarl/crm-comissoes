@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailBoasVindas } from '@/lib/email'
+import bcrypt from 'bcryptjs'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,7 +52,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Função que cria usuário via API REST diretamente
 async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users`
   
@@ -132,7 +132,6 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Iniciando cadastro:', email)
 
-    // Verifica se email já existe na tabela
     const { data: emailExiste } = await supabaseAdmin
       .from('usuarios')
       .select('id')
@@ -146,7 +145,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Cria usuário via API REST
+    // Gera hash da senha
+    const senhaHash = await bcrypt.hash(senha, 10)
+    console.log('Senha hashada gerada')
+
     let authData
     try {
       authData = await criarUsuarioViaAPI(email, senha, nome)
@@ -176,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Usuário criado no Auth:', authData.id)
 
-    // Insere na tabela usuarios
+    // Insere na tabela usuarios COM senha_hash
     const { data: novoUsuario, error: insertError } = await supabaseAdmin
       .from('usuarios')
       .insert({
@@ -185,6 +187,7 @@ export async function POST(request: NextRequest) {
         nome,
         telefone,
         endereco: endereco || null,
+        senha_hash: senhaHash, // ADICIONA O HASH
         is_master: false,
       })
       .select()
@@ -193,7 +196,6 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('❌ Erro ao inserir na tabela:', insertError)
       
-      // Tenta reverter
       try {
         await fetch(
           `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${authData.id}`,
@@ -218,7 +220,6 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Usuário salvo na tabela')
 
-    // Envia email
     try {
       await enviarEmailBoasVindas(email, nome, senha)
       console.log('✅ Email enviado')
