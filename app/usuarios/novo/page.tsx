@@ -6,7 +6,6 @@ import { useUsuario } from '@/hooks/useUsuario'
 import { UserPlus, User, Mail, Phone, MapPin, Lock, Copy, Check, AlertCircle, Loader2, Crown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-// Função para formatar telefone
 function formatarTelefone(valor: string): string {
   const numeros = valor.replace(/\D/g, '')
   
@@ -41,15 +40,15 @@ export default function NovoUsuarioPage() {
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
-  if (!loadingUser) {
-    if (!usuario?.is_master) {
-      router.push('/dashboard')
-    } else {
-      console.log('👤 Usuário master detectado, carregando lista...')
-      gerarSenha()
-      carregarUsuarios()
+    if (!loadingUser) {
+      if (!usuario?.is_master) {
+        router.push('/dashboard')
+      } else {
+        console.log('👤 Usuário master detectado, carregando lista...')
+        gerarSenha()
+        carregarUsuarios()
+      }
     }
-  }
   }, [loadingUser, usuario, router])
 
   const gerarSenha = () => {
@@ -74,41 +73,53 @@ export default function NovoUsuarioPage() {
   }
 
   const carregarUsuarios = async () => {
-  try {
-    setLoading(true)
-    console.log('🔄 Carregando usuários...')
-    
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
+    try {
+      setLoading(true)
+      console.log('🔄 Carregando usuários...')
+      
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
 
-    console.log('🔑 Token:', token ? 'OK' : 'Ausente')
+      console.log('🔑 Token:', token ? 'OK' : 'Ausente')
 
-    if (!token) {
-      console.error('❌ Sem token')
-      setLoading(false)
-      return
-    }
+      if (!token) {
+        console.error('❌ Sem token')
+        setLoading(false)
+        return
+      }
 
-    const res = await fetch(`/api/usuarios?token=${token}`)
-    console.log('📥 Status da resposta:', res.status)
+      const res = await fetch(`/api/usuarios?token=${token}`)
+      console.log('📥 Status da resposta:', res.status)
 
-    const data = await res.json()
-    console.log('📥 Dados recebidos:', data)
-    
-    if (res.ok && Array.isArray(data)) {
-      setUsuarios(data)
-      console.log(`✅ ${data.length} usuários carregados`)
-    } else {
-      console.error('❌ Erro ao carregar:', data)
+      const textoResposta = await res.text()
+      console.log('📄 Resposta completa (texto):', textoResposta)
+
+      let data
+      try {
+        data = JSON.parse(textoResposta)
+      } catch (parseError) {
+        console.error('❌ Erro ao fazer parse do JSON:', parseError)
+        console.error('📄 Texto recebido:', textoResposta)
+        setLoading(false)
+        return
+      }
+
+      console.log('📥 Dados parseados:', data)
+      
+      if (res.ok && Array.isArray(data)) {
+        setUsuarios(data)
+        console.log(`✅ ${data.length} usuários carregados`)
+      } else {
+        console.error('❌ Erro ao carregar:', data)
+        setUsuarios([])
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro no carregamento:', error)
       setUsuarios([])
+    } finally {
+      setLoading(false)
     }
-    
-  } catch (error) {
-    console.error('❌ Erro no carregamento:', error)
-    setUsuarios([])
-  } finally {
-    setLoading(false)
-  }
   }
 
   const validarCampos = () => {
@@ -312,7 +323,7 @@ export default function NovoUsuarioPage() {
                   onChange={handleTelefoneChange}
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="(11) 98765-4321"
+                  placeholder="(00) 00000-0000"
                 />
               </div>
 
@@ -334,7 +345,7 @@ export default function NovoUsuarioPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
                   <Lock className="w-4 h-4" />
-                  Senha Gerada Automaticamente
+                  Senha Gerada Automaticamente *
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -346,26 +357,17 @@ export default function NovoUsuarioPage() {
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2"
                   >
-                    {senhaCopied ? (
-                      <>
-                        <Check className="w-4 h-4 text-green-600" />
-                        Copiado!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        Copiar
-                      </>
-                    )}
+                    {senhaCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {senhaCopied ? 'Copiado!' : 'Copiar'}
                   </button>
                   <button
                     type="button"
                     onClick={gerarSenha}
-                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                   >
-                    Nova
+                    🔄
                   </button>
                 </div>
               </div>
@@ -373,7 +375,7 @@ export default function NovoUsuarioPage() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
               >
                 {salvando ? (
                   <>
@@ -390,68 +392,72 @@ export default function NovoUsuarioPage() {
             </form>
           </div>
 
-          {/* Lista de Usuários */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <User className="w-5 h-5 text-blue-600" />
-              Usuários Cadastrados ({usuarios.length})
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
+                Usuários Cadastrados ({usuarios.length})
+              </h2>
+              
+              <button
+                onClick={carregarUsuarios}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Carregando...
+                  </>
+                ) : (
+                  <>
+                    🔄 Recarregar
+                  </>
+                )}
+              </button>
+            </div>
 
             <div className="space-y-4 max-h-[600px] overflow-y-auto">
-              {usuarios.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              ) : usuarios.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
                   Nenhum usuário cadastrado ainda
-                </p>
+                </div>
               ) : (
-                usuarios.map((user) => (
-                  <div
-                    key={user.id}
-                    className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-slate-900">
-                          {user.nome}
-                        </h3>
-                        {user.is_master && (
-                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                            <Crown className="w-3 h-3" />
-                            Master
-                          </span>
+                usuarios.map((u) => (
+                  <div key={u.id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-slate-900">{u.nome}</h3>
+                          {u.is_master && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">
+                              <Crown className="w-3 h-3" />
+                              Master
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
+                          <Mail className="w-3 h-3" />
+                          {u.email}
+                        </p>
+                        <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
+                          <Phone className="w-3 h-3" />
+                          {u.telefone}
+                        </p>
+                        {u.endereco && (
+                          <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
+                            <MapPin className="w-3 h-3" />
+                            {u.endereco}
+                          </p>
                         )}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        user.ativo
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {user.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
                     </div>
-
-                    <div className="space-y-1 text-sm text-slate-600">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4" />
-                        {user.email}
-                      </div>
-                      {user.telefone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4" />
-                          {user.telefone}
-                        </div>
-                      )}
-                      {user.endereco && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          {user.endereco}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      <p className="text-xs text-slate-500">
-                        Cadastrado em {new Date(user.criado_em).toLocaleDateString('pt-BR')}
-                      </p>
+                    <div className="mt-2 text-xs text-slate-400">
+                      Cadastrado em {new Date(u.created_at).toLocaleDateString('pt-BR')}
                     </div>
                   </div>
                 ))

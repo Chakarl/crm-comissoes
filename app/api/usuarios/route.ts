@@ -148,6 +148,9 @@ export async function POST(request: NextRequest) {
     console.log('5. Usuário master verificado')
 
     console.log('6. Criando usuário no Auth...')
+    console.log('   Email:', email)
+    console.log('   Senha tem:', senha.length, 'caracteres')
+    
     const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
@@ -155,9 +158,13 @@ export async function POST(request: NextRequest) {
     })
 
     if (createAuthError) {
-      console.error('ERRO ao criar no Auth:', createAuthError.message)
+      console.error('ERRO ao criar no Auth (objeto completo):', createAuthError)
+      console.error('ERRO mensagem:', createAuthError.message)
+      console.error('ERRO status:', createAuthError.status)
+      console.error('ERRO name:', createAuthError.name)
+      console.error('ERRO __isAuthError:', createAuthError.__isAuthError)
       
-      if (createAuthError.message.includes('already registered')) {
+      if (createAuthError.message?.includes('already registered')) {
         return NextResponse.json(
           { erro: 'Este email já está cadastrado' },
           { status: 400 }
@@ -165,13 +172,14 @@ export async function POST(request: NextRequest) {
       }
       
       return NextResponse.json(
-        { erro: `Erro ao criar usuário: ${createAuthError.message}` },
+        { erro: `Erro ao criar usuário no Auth: ${createAuthError.message || JSON.stringify(createAuthError)}` },
         { status: 500 }
       )
     }
 
     if (!authData?.user) {
       console.error('ERRO: Auth não retornou usuário')
+      console.error('authData recebido:', authData)
       return NextResponse.json(
         { erro: 'Falha ao criar usuário no sistema de autenticação' },
         { status: 500 }
@@ -196,6 +204,7 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('ERRO ao inserir na tabela:', insertError.message)
+      console.error('Detalhes do erro:', JSON.stringify(insertError, null, 2))
       
       console.log('9. Fazendo rollback (deletando do Auth)...')
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
