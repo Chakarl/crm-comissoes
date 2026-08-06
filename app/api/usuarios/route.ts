@@ -2,28 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailBoasVindas } from '@/lib/email'
 
-export async function POST(request: NextRequest) {
-  console.log('=== INÍCIO POST /api/usuarios ===')
-  
-  // ADICIONE ESTA VERIFICAÇÃO NO TOPO:
-  console.log('🔑 Verificando variáveis de ambiente...')
-  console.log('   NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'OK' : '❌ FALTANDO')
-  console.log('   NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : '❌ FALTANDO')
-  console.log('   SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? `OK (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : '❌ FALTANDO')
-
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('❌ SUPABASE_SERVICE_ROLE_KEY não está configurada!')
-    return NextResponse.json(
-      { erro: 'Configuração do servidor incompleta. Contate o administrador.' },
-      { status: 500 }
-    )
-  }
-
-  try {
-    const body = await request.json()
-    
-    // ... resto do código
-
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -112,6 +90,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   console.log('=== INÍCIO POST /api/usuarios ===')
   
+  // Verificação de variáveis de ambiente
+  console.log('🔑 Verificando variáveis de ambiente...')
+  console.log('   NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'OK' : '❌ FALTANDO')
+  console.log('   NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'OK' : '❌ FALTANDO')
+  console.log('   SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? `OK (${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...)` : '❌ FALTANDO')
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('❌ SUPABASE_SERVICE_ROLE_KEY não está configurada!')
+    return NextResponse.json(
+      { erro: 'Configuração do servidor incompleta. Contate o administrador.' },
+      { status: 500 }
+    )
+  }
+
   try {
     const body = await request.json()
     const { email, senha, nome, telefone, endereco, token } = body
@@ -172,19 +164,58 @@ export async function POST(request: NextRequest) {
     console.log('6. Criando usuário no Auth...')
     console.log('   Email:', email)
     console.log('   Senha tem:', senha.length, 'caracteres')
-    
-    const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
+
+    // Tentativa 1: com email_confirm
+    let authData: any = null
+    let createAuthError: any = null
+
+    const resultado1 = await supabaseAdmin.auth.admin.createUser({
       email,
       password: senha,
       email_confirm: true,
+      user_metadata: {
+        nome,
+        telefone,
+        endereco: endereco || null
+      }
     })
 
+    authData = resultado1.data
+    createAuthError = resultado1.error
+
+    // Se der erro vazio, tenta sem email_confirm
+    if (createAuthError && (!createAuthError.message || createAuthError.message === '{}')) {
+      console.log('⚠️ Erro vazio detectado. Tentando sem email_confirm...')
+      
+      const resultado2 = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: senha,
+        user_metadata: {
+          nome,
+          telefone,
+          endereco: endereco || null
+        }
+      })
+      
+      if (resultado2.error) {
+        console.error('❌ ERRO na segunda tentativa:', resultado2.error)
+        return NextResponse.json(
+          { erro: `Erro ao criar usuário: ${resultado2.error.message || 'Erro desconhecido'}` },
+          { status: 500 }
+        )
+      }
+      
+      authData = resultado2.data
+      createAuthError = null
+      console.log('✅ Usuário criado na segunda tentativa (sem email_confirm)')
+    }
+
+    // Se ainda houver erro, retorna
     if (createAuthError) {
-      console.error('ERRO ao criar no Auth (objeto completo):', createAuthError)
-      console.error('ERRO mensagem:', createAuthError.message)
-      console.error('ERRO status:', createAuthError.status)
-      console.error('ERRO name:', createAuthError.name)
-      console.error('ERRO __isAuthError:', createAuthError.__isAuthError)
+      console.error('❌ ERRO ao criar no Auth:', createAuthError)
+      console.error('   Mensagem:', createAuthError.message)
+      console.error('   Status:', createAuthError.status)
+      console.error('   Name:', createAuthError.name)
       
       if (createAuthError.message?.includes('already registered')) {
         return NextResponse.json(
@@ -194,7 +225,7 @@ export async function POST(request: NextRequest) {
       }
       
       return NextResponse.json(
-        { erro: `Erro ao criar usuário no Auth: ${createAuthError.message || JSON.stringify(createAuthError)}` },
+        { erro: `Erro ao criar usuário: ${createAuthError.message || 'Verifique as configurações do Supabase'}` },
         { status: 500 }
       )
     }
