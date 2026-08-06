@@ -56,69 +56,45 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
     { href: '/clientes', label: 'Clientes', icon: Users },
     isMaster
       ? { href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }
-      : { href: '/renovacoes', label: 'Alertas de Renovação', icon: Bell },
+      : { href: '/renovacoes', label: 'Renovações', icon: Bell },
     { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   ]
 
   return (
     <nav className="bg-slate-900 border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between">
-          {/* Esquerda: Logo + Saudação + Links desktop */}
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex-shrink-0">
-                <Image
-                  src="/logo.png"
-                  alt="Logo"
-                  width={140}
-                  height={40}
-                  className="h-9 w-auto object-contain"
-                  priority
-                />
-              </Link>
+      {/* ——— Linha 1: Logo + Saudação | Minha Conta + Sair ——— */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-16">
+          {/* Esquerda */}
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="flex-shrink-0">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={160}
+                height={44}
+                className="h-10 w-auto object-contain"
+                priority
+              />
+            </Link>
 
-              {/* Saudação desktop */}
-              <div className="hidden sm:flex items-center gap-1.5 text-sm text-slate-400 border-l border-slate-700 pl-4">
-                <span>{saudacao},</span>
-                <span className="text-white font-medium">{primeiroNome}</span>
-                <span className="text-lg">👋</span>
-              </div>
-            </div>
-
-            {/* Links desktop */}
-            <div className="hidden lg:flex gap-2">
-              {links.map((link) => {
-                const Icon = link.icon
-                const isActive = pathname === link.href
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap
-                      ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                      }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {link.label}
-                  </Link>
-                )
-              })}
+            {/* Saudação — desktop */}
+            <div className="hidden sm:flex items-center gap-1.5 text-sm text-slate-400 border-l border-slate-700 pl-4">
+              <span>{saudacao},</span>
+              <span className="text-white font-semibold">{primeiroNome}</span>
+              <span className="text-lg">👋</span>
             </div>
           </div>
 
-          {/* Direita: Minha Conta + Sair (desktop) */}
-          <div className="hidden lg:flex items-center gap-3">
+          {/* Direita — desktop */}
+          <div className="hidden lg:flex items-center gap-2">
             <Link
               href="/dashboard/minha-conta"
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                 ${
                   pathname === '/dashboard/minha-conta'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
             >
               <UserCog className="w-4 h-4" />
@@ -126,36 +102,27 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
             </Link>
             <button
               onClick={onLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Sair
             </button>
           </div>
 
-          {/* Hamburguer mobile */}
+          {/* Hamburguer — mobile */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             className="lg:hidden text-slate-300 hover:text-white"
           >
-            {menuOpen ? (
-              <X className="w-6 h-6" />
-            ) : (
-              <Menu className="w-6 h-6" />
-            )}
+            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
+      </div>
 
-        {/* Menu mobile */}
-        {menuOpen && (
-          <div className="lg:hidden mt-4 flex flex-col gap-2">
-            {/* Saudação mobile */}
-            <div className="flex items-center gap-2 px-4 py-3 text-sm text-slate-400 border-b border-slate-700 mb-1">
-              <span>{saudacao},</span>
-              <span className="text-white font-medium">{primeiroNome}</span>
-              <span className="text-lg">👋</span>
-            </div>
-
+      {/* ——— Linha 2: Navegação — desktop ——— */}
+      <div className="hidden lg:block border-t border-slate-800 bg-slate-900/60">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center gap-1 h-12">
             {links.map((link) => {
               const Icon = link.icon
               const isActive = pathname === link.href
@@ -163,49 +130,80 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
                     ${
                       isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-4 h-4" />
                   {link.label}
                 </Link>
               )
             })}
+          </div>
+        </div>
+      </div>
 
-            {/* Minha Conta + Sair (mobile) */}
-            <div className="border-t border-slate-700 mt-2 pt-3 flex flex-col gap-2">
+      {/* ——— Menu mobile ——— */}
+      {menuOpen && (
+        <div className="lg:hidden border-t border-slate-800 px-4 py-4 flex flex-col gap-1">
+          {/* Saudação mobile */}
+          <div className="flex items-center gap-2 px-3 py-3 text-sm text-slate-400 border-b border-slate-700 mb-2">
+            <span>{saudacao},</span>
+            <span className="text-white font-semibold">{primeiroNome}</span>
+            <span className="text-lg">👋</span>
+          </div>
+
+          {links.map((link) => {
+            const Icon = link.icon
+            const isActive = pathname === link.href
+            return (
               <Link
-                href="/dashboard/minha-conta"
+                key={link.href}
+                href={link.href}
                 onClick={() => setMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors
                   ${
-                    pathname === '/dashboard/minha-conta'
+                    isActive
                       ? 'bg-blue-600 text-white'
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
               >
-                <UserCog className="w-5 h-5" />
-                Minha Conta
+                <Icon className="w-5 h-5" />
+                {link.label}
               </Link>
-              <button
-                onClick={() => {
-                  setMenuOpen(false)
-                  onLogout()
-                }}
-                className="flex items-center justify-center gap-2 mx-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-sm"
-              >
-                <LogOut className="w-4 h-4" />
-                Sair
-              </button>
-            </div>
+            )
+          })}
+
+          <div className="border-t border-slate-700 mt-3 pt-3 flex flex-col gap-2">
+            <Link
+              href="/dashboard/minha-conta"
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors
+                ${
+                  pathname === '/dashboard/minha-conta'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+            >
+              <UserCog className="w-5 h-5" />
+              Minha Conta
+            </Link>
+            <button
+              onClick={() => {
+                setMenuOpen(false)
+                onLogout()
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </nav>
   )
 }
