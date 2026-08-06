@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -32,9 +33,7 @@ function getSaudacao(): string {
 
 function getPrimeiroNome(nome: string): string {
   if (!nome) return ''
-  // Se for e-mail, pega antes do @
   const base = nome.includes('@') ? nome.split('@')[0] : nome
-  // Pega só o primeiro nome e capitaliza
   const primeiro = base.split(/[\s._-]/)[0]
   return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase()
 }
@@ -44,7 +43,6 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [saudacao, setSaudacao] = useState(getSaudacao())
 
-  // Atualiza a saudação a cada minuto
   useEffect(() => {
     const interval = setInterval(() => setSaudacao(getSaudacao()), 60_000)
     return () => clearInterval(interval)
@@ -69,11 +67,15 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
           {/* Esquerda: Logo + Saudação + Links desktop */}
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard"
-                className="text-xl sm:text-2xl font-bold text-white whitespace-nowrap"
-              >
-                CRM Comissões
+              <Link href="/dashboard" className="flex-shrink-0">
+                <Image
+                  src="/logo.png"
+                  alt="Logo"
+                  width={140}
+                  height={40}
+                  className="h-9 w-auto object-contain"
+                  priority
+                />
               </Link>
 
               {/* Saudação desktop */}
