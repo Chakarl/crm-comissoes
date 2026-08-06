@@ -51,21 +51,28 @@ export default function CadastrarUsuarioPage() {
 
   // Carrega dados do usuário logado
   useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+  async function init() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-      setMeuId(user.id)
+    setMeuId(user.id)
 
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+    const { data: perfil } = await supabase
+      .from('usuarios')
+      .select('role, is_master')
+      .eq('id', user.id)
+      .single()
 
-      if (perfil) setMeuRole(perfil.role)
+    if (perfil) {
+      // Se is_master = true, trata como master independente do campo role
+      if (perfil.is_master) {
+        setMeuRole('master')
+      } else {
+        setMeuRole(perfil.role || 'corretor')
+      }
     }
-    init()
+  }
+  init()
   }, [])
 
   // Carrega lista de usuários filtrada por role
