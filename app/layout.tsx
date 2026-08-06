@@ -17,16 +17,18 @@ export default function RootLayout({
   const [user, setUser] = useState<any>(null)
   const [nomeUsuario, setNomeUsuario] = useState('')
   const [isMaster, setIsMaster] = useState(false)
+  const [userRole, setUserRole] = useState<string>('corretor')
   const [loading, setLoading] = useState(true)
 
   const carregarDadosUsuario = async (userId: string, email?: string) => {
     const { data: userData } = await supabase
       .from('usuarios')
-      .select('nome, is_master')
+      .select('nome, is_master, role')
       .eq('id', userId)
       .single()
 
     setIsMaster(userData?.is_master || false)
+    setUserRole(userData?.role || 'corretor')
     setNomeUsuario(userData?.nome || email || 'Usuário')
   }
 
@@ -60,6 +62,7 @@ export default function RootLayout({
         await carregarDadosUsuario(session.user.id, session.user.email)
       } else {
         setIsMaster(false)
+        setUserRole('corretor')
         setNomeUsuario('')
       }
 
@@ -97,6 +100,7 @@ export default function RootLayout({
           <Navbar
             userName={nomeUsuario}
             isMaster={isMaster}
+            userRole={userRole}
             onLogout={handleLogout}
           />
         )}

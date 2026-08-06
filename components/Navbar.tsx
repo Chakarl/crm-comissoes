@@ -19,7 +19,8 @@ import { useState, useEffect } from 'react'
 
 interface NavbarProps {
   userName: string
-  role: string        // 'master' | 'gerente' | 'corretor'
+  isMaster: boolean
+  userRole: string   // ← adicione isso
   onLogout: () => void
 }
 
@@ -54,11 +55,12 @@ export default function Navbar({ userName, isMaster, onLogout }: NavbarProps) {
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/propostas', label: 'Propostas', icon: FileText },
   { href: '/clientes', label: 'Clientes', icon: Users },
-  ...(role !== 'corretor'
+  // Master e Gerente veem "Cadastrar Usuário"; Corretor vê "Renovações"
+  ...(userRole === 'master' || userRole === 'gerente'
     ? [{ href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }]
     : [{ href: '/renovacoes', label: 'Renovações', icon: Bell }]),
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
-  ]
+] 
 
   return (
     <nav className="bg-slate-900 border-b border-slate-800">
