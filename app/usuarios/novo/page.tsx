@@ -51,6 +51,22 @@ export default function NovoUsuarioPage() {
     setTimeout(() => setSenhaCopied(false), 2000)
   }
 
+  // Máscara de telefone
+  const formatarTelefone = (valor: string) => {
+    const numero = valor.replace(/\D/g, '')
+    
+    if (numero.length <= 10) {
+      return numero
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+    }
+    
+    return numero
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d)/, '$1-$2')
+      .substring(0, 15)
+  }
+
   const obterToken = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -132,9 +148,11 @@ export default function NovoUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.erro || 'Erro ao cadastrar')
+        // Exibe o erro real retornado pela API
+        throw new Error(data.erro || `Erro ${res.status}: ${res.statusText}`)
       }
 
+      // Limpa formulário
       setNome('')
       setEmail('')
       setTelefone('')
@@ -144,12 +162,13 @@ export default function NovoUsuarioPage() {
 
       await carregarUsuarios()
      
+      // Mostra popup de sucesso
       setShowPopup(true)
       setTimeout(() => setShowPopup(false), 4000)
      
     } catch (err: any) {
-      console.error('Erro ao cadastrar:', err)
-      setErro(err.message || 'Erro desconhecido ao cadastrar')
+      console.error('Erro completo ao cadastrar:', err)
+      setErro(err.message || 'Erro desconhecido ao cadastrar usuário')
     } finally {
       setSalvando(false)
     }
@@ -167,6 +186,7 @@ export default function NovoUsuarioPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
+      {/* Popup de Sucesso */}
       {showPopup && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 z-50 animate-in slide-in-from-top">
           <Check className="w-6 h-6" />
@@ -178,6 +198,7 @@ export default function NovoUsuarioPage() {
       )}
 
       <div className="max-w-6xl mx-auto">
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             <UserPlus className="w-8 h-8 text-blue-600" />
@@ -187,6 +208,7 @@ export default function NovoUsuarioPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Formulário de Cadastro */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-blue-600" />
@@ -241,10 +263,11 @@ export default function NovoUsuarioPage() {
                 <input
                   type="tel"
                   value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
+                  onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="(11) 98765-4321"
+                  maxLength={15}
                   required
                 />
               </div>
@@ -260,7 +283,7 @@ export default function NovoUsuarioPage() {
                   onChange={(e) => setEndereco(e.target.value)}
                   disabled={salvando}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                  placeholder="Rua, número, bairro, cidade"
+                  placeholder="Rua, número, bairro"
                 />
               </div>
 
@@ -273,21 +296,26 @@ export default function NovoUsuarioPage() {
                   <input
                     type="text"
                     value={senha}
-                    readOnly
+                    disabled
                     className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono"
                   />
                   <button
                     type="button"
                     onClick={copiarSenha}
                     className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                    title="Copiar senha"
                   >
-                    {senhaCopied ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
+                    {senhaCopied ? (
+                      <Check className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Copy className="w-5 h-5 text-slate-600" />
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={gerarSenha}
                     disabled={salvando}
-                    className="px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
                   >
                     Nova
                   </button>
@@ -297,7 +325,7 @@ export default function NovoUsuarioPage() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
               >
                 {salvando ? (
                   <>
@@ -314,6 +342,7 @@ export default function NovoUsuarioPage() {
             </form>
           </div>
 
+          {/* Lista de Usuários */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-blue-600" />
@@ -321,44 +350,40 @@ export default function NovoUsuarioPage() {
             </h2>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {usuarios.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">Nenhum usuário cadastrado ainda</p>
-              ) : (
-                usuarios.map((u) => (
-                  <div
-                    key={u.id}
-                    className="p-4 border border-slate-200 rounded-lg hover:border-blue-300 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-slate-900">{u.nome}</h3>
-                          {u.is_master && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded">
-                              <Crown className="w-3 h-3" />
-                              Master
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-600 mt-1 flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5" />
-                          {u.email}
-                        </p>
-                        <p className="text-sm text-slate-600 mt-1 flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5" />
-                          {u.telefone}
-                        </p>
-                        {u.endereco && (
-                          <p className="text-sm text-slate-600 mt-1 flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5" />
-                            {u.endereco}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+              {usuarios.map((u) => (
+                <div
+                  key={u.id}
+                  className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-slate-900">{u.nome}</h3>
+                    {u.is_master && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">
+                        <Crown className="w-3 h-3" />
+                        Master
+                      </span>
+                    )}
                   </div>
-                ))
-              )}
+                  <div className="space-y-1 text-sm text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      {u.email}
+                    </div>
+                    {u.telefone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4" />
+                        {u.telefone}
+                      </div>
+                    )}
+                    {u.endereco && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        {u.endereco}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
