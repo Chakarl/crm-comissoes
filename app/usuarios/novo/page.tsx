@@ -58,10 +58,14 @@ export default function NovoUsuarioPage() {
     if (numero.length === 0) return ''
     if (numero.length <= 2) return `(${numero}`
     if (numero.length <= 6) return `(${numero.slice(0, 2)}) ${numero.slice(2)}`
-    if (numero.length <= 10) {
-      return `(${numero.slice(0, 2)}) ${numero.slice(2, 6)}-${numero.slice(6)}`
-    }
+    if (numero.length <= 10) return `(${numero.slice(0, 2)}) ${numero.slice(2, 6)}-${numero.slice(6)}`
+    
     return `(${numero.slice(0, 2)}) ${numero.slice(2, 7)}-${numero.slice(7, 11)}`
+  }
+
+  const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatarTelefone(e.target.value)
+    setTelefone(formatted)
   }
 
   const obterToken = async () => {
@@ -145,7 +149,7 @@ export default function NovoUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.erro || `Erro ${res.status}: ${res.statusText}`)
+        throw new Error(data.erro || `Erro ${res.status}`)
       }
 
       // Limpa formulário
@@ -158,13 +162,13 @@ export default function NovoUsuarioPage() {
 
       await carregarUsuarios()
      
-      // Mostra popup de sucesso
+      // Popup de sucesso
       setShowPopup(true)
       setTimeout(() => setShowPopup(false), 4000)
      
     } catch (err: any) {
-      console.error('Erro completo ao cadastrar:', err)
-      setErro(err.message || 'Erro desconhecido ao cadastrar usuário')
+      console.error('Erro ao cadastrar:', err)
+      setErro(err.message || 'Erro desconhecido')
     } finally {
       setSalvando(false)
     }
@@ -187,8 +191,8 @@ export default function NovoUsuarioPage() {
         <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 z-50 animate-in slide-in-from-top">
           <Check className="w-6 h-6" />
           <div>
-            <p className="font-semibold">✅ Usuário cadastrado com sucesso!</p>
-            <p className="text-sm opacity-90">Email com credenciais enviado</p>
+            <p className="font-semibold">✅ Usuário cadastrado!</p>
+            <p className="text-sm opacity-90">Email enviado com credenciais</p>
           </div>
         </div>
       )}
@@ -204,7 +208,7 @@ export default function NovoUsuarioPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Formulário de Cadastro */}
+          {/* Formulário */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-blue-600" />
@@ -229,7 +233,7 @@ export default function NovoUsuarioPage() {
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                   disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 transition-all"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
                   placeholder="Ex: João Silva"
                   required
                 />
@@ -245,8 +249,8 @@ export default function NovoUsuarioPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 transition-all"
-                  placeholder="usuario@exemplo.com"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
+                  placeholder="email@exemplo.com"
                   required
                 />
               </div>
@@ -259,10 +263,10 @@ export default function NovoUsuarioPage() {
                 <input
                   type="tel"
                   value={telefone}
-                  onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
+                  onChange={handleTelefoneChange}
                   disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 transition-all"
-                  placeholder="(11) 98765-4321"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
+                  placeholder="(00) 00000-0000"
                   maxLength={15}
                   required
                 />
@@ -271,34 +275,34 @@ export default function NovoUsuarioPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
-                  Endereço
+                  Endereço (opcional)
                 </label>
                 <input
                   type="text"
                   value={endereco}
                   onChange={(e) => setEndereco(e.target.value)}
                   disabled={salvando}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 transition-all"
-                  placeholder="Rua, número, bairro, cidade"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
+                  placeholder="Rua, número, bairro"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
                   <Lock className="w-4 h-4" />
-                  Senha Temporária
+                  Senha Gerada
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={senha}
                     readOnly
-                    className="flex-1 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-sm"
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 font-mono text-sm"
                   />
                   <button
                     type="button"
                     onClick={copiarSenha}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                     title="Copiar senha"
                   >
                     {senhaCopied ? (
@@ -310,20 +314,18 @@ export default function NovoUsuarioPage() {
                   <button
                     type="button"
                     onClick={gerarSenha}
-                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors text-sm font-medium"
+                    disabled={salvando}
+                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
                   >
-                    Gerar Nova
+                    Nova
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  O usuário receberá esta senha por email e poderá alterá-la no primeiro acesso
-                </p>
               </div>
 
               <button
                 type="submit"
                 disabled={salvando}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors disabled:bg-blue-300 flex items-center justify-center gap-2"
               >
                 {salvando ? (
                   <>
@@ -343,48 +345,48 @@ export default function NovoUsuarioPage() {
           {/* Lista de Usuários */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <User className="w-5 h-5 text-blue-600" />
+              <User className="w-5 h-5 text-slate-600" />
               Usuários Cadastrados ({usuarios.length})
             </h2>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {usuarios.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">Nenhum usuário cadastrado ainda</p>
-              ) : (
-                usuarios.map((u) => (
-                  <div
-                    key={u.id}
-                    className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-sm transition-all"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold text-slate-900">{u.nome}</p>
-                          {u.is_master && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded">
-                              <Crown className="w-3 h-3" />
-                              Master
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-600 flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5" />
-                          {u.email}
-                        </p>
-                        <p className="text-sm text-slate-600 flex items-center gap-1.5 mt-1">
-                          <Phone className="w-3.5 h-3.5" />
-                          {u.telefone}
-                        </p>
-                        {u.endereco && (
-                          <p className="text-sm text-slate-500 flex items-center gap-1.5 mt-1">
-                            <MapPin className="w-3.5 h-3.5" />
-                            {u.endereco}
-                          </p>
+              {usuarios.map((u) => (
+                <div
+                  key={u.id}
+                  className="p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-semibold text-slate-900">{u.nome}</p>
+                        {u.is_master && (
+                          <Crown className="w-4 h-4 text-yellow-500" title="Master" />
                         )}
                       </div>
+                      <p className="text-sm text-slate-600 flex items-center gap-1">
+                        <Mail className="w-3 h-3" />
+                        {u.email}
+                      </p>
+                      <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
+                        <Phone className="w-3 h-3" />
+                        {u.telefone}
+                      </p>
+                      {u.endereco && (
+                        <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
+                          <MapPin className="w-3 h-3" />
+                          {u.endereco}
+                        </p>
+                      )}
                     </div>
                   </div>
-                ))
+                </div>
+              ))}
+
+              {usuarios.length === 0 && !loading && (
+                <div className="text-center py-12 text-slate-500">
+                  <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Nenhum usuário cadastrado ainda</p>
+                </div>
               )}
             </div>
           </div>
