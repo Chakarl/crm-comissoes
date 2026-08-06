@@ -49,7 +49,9 @@ export default function ClientesPage() {
 
   // ── Filtro por corretor (master only) ──
   const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
+  const [listaCorretores, setListaCorretores] = useState<
+    { id: string; nome: string }[]
+  >([])
 
   useEffect(() => {
     if (usuario) {
@@ -58,7 +60,6 @@ export default function ClientesPage() {
     }
   }, [usuario])
 
-  // Recarrega quando muda o filtro de corretor
   useEffect(() => {
     if (usuario) loadClientes()
   }, [corretorFiltro])
@@ -182,9 +183,10 @@ export default function ClientesPage() {
     setDeletando(null)
   }
 
-  // Mapa de nomes dos corretores para exibição
   const nomeCorretorMap: Record<string, string> = {}
-  listaCorretores.forEach((c) => { nomeCorretorMap[c.id] = c.nome })
+  listaCorretores.forEach((c) => {
+    nomeCorretorMap[c.id] = c.nome
+  })
 
   const datasDisponiveis = clientes
     .map((c) => c.ultimaProposta || '')
@@ -192,7 +194,8 @@ export default function ClientesPage() {
 
   const filtered = clientes.filter((c) => {
     const matchMes =
-      !mesFiltro || (c.ultimaProposta && c.ultimaProposta.startsWith(mesFiltro))
+      !mesFiltro ||
+      (c.ultimaProposta && c.ultimaProposta.startsWith(mesFiltro))
     const matchSearch =
       c.nome?.toLowerCase().includes(search.toLowerCase()) ||
       c.cpf?.toLowerCase().includes(search.toLowerCase())
@@ -319,19 +322,24 @@ export default function ClientesPage() {
                   <td className="px-6 py-4 font-medium text-slate-900">
                     {c.nome}
                   </td>
-                  <td className="px-6 py-4 text-slate-700">{c.cpf || '—'}</td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {c.cpf || '—'}
+                  </td>
                   {usuario?.is_master && corretorFiltro === 'todos' && (
                     <td className="px-6 py-4 text-slate-700">
-                      {c.usuario_id ? nomeCorretorMap[c.usuario_id] || '—' : '—'}
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
+                        {(c.usuario_id && nomeCorretorMap[c.usuario_id]) ||
+                          '—'}
+                      </span>
                     </td>
                   )}
                   <td className="px-6 py-4 text-slate-700">
                     {c.telefone || '—'}
                   </td>
                   <td className="px-6 py-4 text-slate-700">
-                    {c.agencia && c.conta
-                      ? `${c.agencia} / ${c.conta}`
-                      : c.agencia || c.conta || '—'}
+                    {c.agencia || c.conta
+                      ? `${c.agencia || '—'} / ${c.conta || '—'}`
+                      : '—'}
                   </td>
                   <td className="px-6 py-4 text-slate-700">
                     {c.ultimaProposta
@@ -350,7 +358,14 @@ export default function ClientesPage() {
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(c.id)}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Excluir o cliente "${c.nome}"?`
+                            )
+                          )
+                            handleDelete(c.id)
+                        }}
                         disabled={deletando === c.id}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Excluir"
@@ -365,45 +380,57 @@ export default function ClientesPage() {
                   </td>
                 </tr>
               ))}
+              {fatia.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={
+                      usuario?.is_master && corretorFiltro === 'todos' ? 7 : 6
+                    }
+                    className="px-6 py-12 text-center text-slate-500"
+                  >
+                    <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                    <p className="font-medium">Nenhum cliente encontrado</p>
+                    <p className="text-sm mt-1">
+                      Ajuste os filtros ou cadastre um novo cliente.
+                    </p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhum cliente encontrado</p>
-            </div>
-          )}
         </div>
 
         {/* Mobile Cards */}
-        <div className="lg:hidden space-y-4">
+        <div className="lg:hidden space-y-3">
           {fatia.map((c) => (
             <div
               key={c.id}
               className="bg-white rounded-xl border border-slate-200 p-4"
             >
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex items-start justify-between mb-3">
                 <div>
-                  <div className="font-semibold text-slate-900">{c.nome}</div>
-                  <div className="text-xs text-slate-500">{c.cpf || '—'}</div>
-                  {usuario?.is_master && corretorFiltro === 'todos' && c.usuario_id && (
-                    <div className="text-xs text-violet-600 mt-0.5">
-                      {nomeCorretorMap[c.usuario_id] || '—'}
-                    </div>
+                  <h3 className="font-semibold text-slate-900">{c.nome}</h3>
+                  <p className="text-sm text-slate-500">{c.cpf || 'Sem CPF'}</p>
+                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                    <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
+                      {(c.usuario_id && nomeCorretorMap[c.usuario_id]) || '—'}
+                    </span>
                   )}
                 </div>
                 <div className="flex gap-1">
                   <button
                     onClick={() => abrirEditar(c)}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(c.id)}
+                    onClick={() => {
+                      if (confirm(`Excluir o cliente "${c.nome}"?`))
+                        handleDelete(c.id)
+                    }}
                     disabled={deletando === c.id}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
                   >
                     {deletando === c.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -413,134 +440,160 @@ export default function ClientesPage() {
                   </button>
                 </div>
               </div>
-              <div className="text-sm text-slate-600">
-                {c.telefone || '—'} •{' '}
-                {c.ultimaProposta
-                  ? new Date(
-                      c.ultimaProposta + 'T00:00:00'
-                    ).toLocaleDateString('pt-BR')
-                  : 'Sem proposta'}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-slate-500">Telefone</span>
+                  <p className="font-medium text-slate-900">
+                    {c.telefone || '—'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Ag / Conta</span>
+                  <p className="font-medium text-slate-900">
+                    {c.agencia || c.conta
+                      ? `${c.agencia || '—'} / ${c.conta || '—'}`
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Última Proposta</span>
+                  <p className="font-medium text-slate-900">
+                    {c.ultimaProposta
+                      ? new Date(
+                          c.ultimaProposta + 'T00:00:00'
+                        ).toLocaleDateString('pt-BR')
+                      : '—'}
+                  </p>
+                </div>
               </div>
             </div>
           ))}
-
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              <UsersIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhum cliente encontrado</p>
+          {fatia.length === 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+              <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+              <p className="font-medium">Nenhum cliente encontrado</p>
+              <p className="text-sm mt-1">
+                Ajuste os filtros ou cadastre um novo cliente.
+              </p>
             </div>
           )}
         </div>
 
         {/* Paginação */}
-        <Paginacao pagina={pag} total={totalPaginas} onChange={setPagina} />
+        <Paginacao
+          paginaAtual={pag}
+          totalPaginas={totalPaginas}
+          onMudar={setPagina}
+        />
+      </div>
 
-        {/* Modal Novo/Editar */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {editando ? 'Editar Cliente' : 'Novo Cliente'}
-                </h2>
-                <button
-                  onClick={fecharModal}
-                  className="p-2 hover:bg-slate-100 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+      {/* Modal Novo / Editar */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">
+                {editando ? 'Editar Cliente' : 'Novo Cliente'}
+              </h2>
+              <button
+                onClick={fecharModal}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nome *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nome}
+                  onChange={(e) =>
+                    setFormData({ ...formData, nome: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  CPF
+                </label>
+                <input
+                  type="text"
+                  value={formData.cpf}
+                  onChange={(e) =>
+                    setFormData({ ...formData, cpf: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Telefone
+                </label>
+                <input
+                  type="text"
+                  value={formData.telefone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, telefone: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Agência
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.agencia}
+                    onChange={(e) =>
+                      setFormData({ ...formData, agencia: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Conta
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.conta}
+                    onChange={(e) =>
+                      setFormData({ ...formData, conta: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Nome *
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.nome}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nome: e.target.value })
-                    }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">CPF</label>
-                  <input
-                    type="text"
-                    value={formData.cpf}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cpf: e.target.value })
-                    }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Telefone
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.telefone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
-                    }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Agência
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.agencia}
-                      onChange={(e) =>
-                        setFormData({ ...formData, agencia: e.target.value })
-                      }
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Conta
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.conta}
-                      onChange={(e) =>
-                        setFormData({ ...formData, conta: e.target.value })
-                      }
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
-                  >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {editando ? 'Salvar' : 'Cadastrar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={fecharModal}
-                    className="px-6 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={fecharModal}
+                  className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {editando ? 'Salvar' : 'Cadastrar'}
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
