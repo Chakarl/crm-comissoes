@@ -104,7 +104,6 @@ export default function NovoUsuarioPage() {
       return false
     }
 
-    // Validação básica de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       setErro('Digite um email válido')
@@ -116,7 +115,6 @@ export default function NovoUsuarioPage() {
       return false
     }
 
-    // Validação do telefone formatado
     const numeros = telefone.replace(/\D/g, '')
     if (numeros.length < 10 || numeros.length > 11) {
       setErro('Digite um telefone válido com DDD')
@@ -131,83 +129,83 @@ export default function NovoUsuarioPage() {
     return true
   }
 
- ' const cadastrar = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setErro(null)
-
-  console.log('🔍 Validando campos...')
-  
-  if (!validarCampos()) {
-    console.log('❌ Validação falhou')
-    return
-  }
-
-  console.log('✅ Validação OK')
-  setSalvando(true)
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-
-    console.log('🔑 Token:', token ? 'Presente' : 'Ausente')
-
-    if (!token) {
-      setErro('Sessão inválida. Faça login novamente.')
-      setSalvando(false)
-      return
-    }
-
-    const payload = { 
-      email, 
-      senha, 
-      nome,
-      telefone,
-      endereco: endereco.trim() || null,
-      token 
-    }
-
-    console.log('📤 Enviando:', payload)
-
-    const res = await fetch('/api/usuarios', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-
-    console.log('📥 Status da resposta:', res.status)
-
-    const data = await res.json()
-    console.log('📥 Dados da resposta:', data)
-
-    if (!res.ok) {
-      setErro(data.erro || 'Erro ao cadastrar usuário')
-      setSalvando(false)
-      return
-    }
-
-    console.log('✅ Cadastro concluído com sucesso!')
-
-    // Limpa formulário
-    setNome('')
-    setEmail('')
-    setTelefone('')
-    setEndereco('')
-    gerarSenha()
+  const cadastrar = async (e: React.FormEvent) => {
+    e.preventDefault()
     setErro(null)
 
-    await carregarUsuarios()
-    
-    // Mostra popup de sucesso
-    setShowPopup(true)
-    setTimeout(() => setShowPopup(false), 4000)
-    
-  } catch (err: any) {
-    console.error('❌ Erro no catch:', err)
-    setErro(err.message || 'Erro inesperado ao cadastrar')
-  } finally {
-    setSalvando(false)
+    if (!validarCampos()) {
+      return
+    }
+
+    setSalvando(true)
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      if (!token) {
+        setErro('Sessão inválida. Faça login novamente.')
+        setSalvando(false)
+        return
+      }
+
+      const payload = { 
+        email, 
+        senha, 
+        nome,
+        telefone,
+        endereco: endereco.trim() || null,
+        token 
+      }
+
+      const res = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        setErro('Erro ao processar resposta do servidor')
+        setSalvando(false)
+        return
+      }
+
+      if (!res.ok) {
+        if (typeof data.erro === 'string') {
+          setErro(data.erro)
+        } else if (data.message) {
+          setErro(data.message)
+        } else if (data.error) {
+          setErro(data.error)
+        } else {
+          setErro(`Erro ao cadastrar usuário (${res.status})`)
+        }
+        setSalvando(false)
+        return
+      }
+
+      setNome('')
+      setEmail('')
+      setTelefone('')
+      setEndereco('')
+      gerarSenha()
+      setErro(null)
+
+      await carregarUsuarios()
+      
+      setShowPopup(true)
+      setTimeout(() => setShowPopup(false), 4000)
+      
+    } catch (err: any) {
+      console.error('Erro ao cadastrar:', err)
+      setErro(err.message || 'Erro inesperado ao cadastrar')
+    } finally {
+      setSalvando(false)
+    }
   }
-}'
 
   if (loadingUser || loading) {
     return (
@@ -221,7 +219,6 @@ export default function NovoUsuarioPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
-      {/* Popup de Sucesso */}
       {showPopup && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 z-50 animate-in slide-in-from-top">
           <Check className="w-6 h-6" />
@@ -233,7 +230,6 @@ export default function NovoUsuarioPage() {
       )}
 
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             <UserPlus className="w-8 h-8 text-blue-600" />
@@ -243,7 +239,6 @@ export default function NovoUsuarioPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Formulário de Cadastro */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-blue-600" />
