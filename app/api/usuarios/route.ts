@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users`
   
-  console.log('Criando usuário via API REST:', email)
+  console.log('🔵 Criando usuário via API REST:', email)
   
   const response = await fetch(url, {
     method: 'POST',
@@ -74,12 +74,12 @@ async function criarUsuarioViaAPI(email: string, senha: string, nome: string) {
 
   if (!response.ok) {
     const errorData = await response.json()
-    console.error('Erro na API REST:', errorData)
+    console.error('❌ Erro na API REST:', errorData)
     throw new Error(errorData.msg || errorData.message || 'Erro ao criar usuário')
   }
 
   const data = await response.json()
-  console.log('✅ Resposta da API:', data)
+  console.log('✅ Usuário criado no Auth:', data.id)
   return data
 }
 
@@ -97,7 +97,7 @@ async function deletarUsuarioAuth(userId: string) {
     )
     
     if (response.ok) {
-      console.log('✅ Usuário deletado do Auth:', userId)
+      console.log('🗑️ Usuário deletado do Auth:', userId)
     } else {
       console.warn('⚠️ Falha ao deletar do Auth:', await response.text())
     }
@@ -157,14 +157,23 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Iniciando cadastro:', email)
 
-    // 1. Verifica se email já existe na tabela
-    const { data: emailExiste } = await supabaseAdmin
+    // 1. Verifica se email já existe (ÚNICA VERIFICAÇÃO NECESSÁRIA)
+    const { data: emailExiste, error: checkError } = await supabaseAdmin
       .from('usuarios')
-      .select('id, email')
+      .select('id')
       .eq('email', email)
-      .single()
+      .maybeSingle()
+
+    if (checkError) {
+      console.error('Erro ao verificar email:', checkError)
+      return NextResponse.json(
+        { erro: 'Erro ao verificar email' },
+        { status: 500 }
+      )
+    }
 
     if (emailExiste) {
+      console.log('❌ Email já cadastrado:', email)
       return NextResponse.json(
         { erro: 'Este e-mail já está cadastrado' },
         { status: 400 }
@@ -173,7 +182,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Gera hash da senha
     const senhaHash = await bcrypt.hash(senha, 10)
-    console.log('Senha hashada gerada')
+    console.log('🔒 Senha hashada gerada')
 
     // 3. Cria usuário no Auth
     let authData
@@ -204,70 +213,80 @@ export async function POST(request: NextRequest) {
     }
 
     authUserId = authData.id
-    console.log('✅ Usuário criado no Auth:', authUserId)
 
-    // 4. VERIFICAÇÃO ADICIONAL: Checa se esse ID já existe na tabela
-    const { data: idExiste } = await supabaseAdmin
-      .from('usuarios')
-      .select('id')
-      .eq('id', authUserId)
-      .single()
+    // 4. Insere na tabela usuarios (COM RETRY SE FALHAR)
+    let tentativas = 0
+    let novoUsuario = null
+    let insertError = null
 
-    if (idExiste) {
-      console.error('❌ ID já existe na tabela! Deletando do Auth e abortando')
-      await deletarUsuarioAuth(authUserId)
-      
-      return NextResponse.json(
-        { erro: 'Conflito de ID detectado. Por favor, tente novamente.' },
-        { status: 409 }
-      )
+    while (tentativas < 3 && !novoUsuario) {
+      tentativas++
+      console.log(`💾 Tentativa ${tentativas} de inserir na tabela...`)
+
+      const resultado = await supabaseAdmin
+        .from('usuarios')
+        .insert({
+          id: authUserId,
+          email: email,
+          nome: nome,
+          telefone: telefone,
+          endereco: endereco || null,
+          senha_hash: senhaHash,
+          is_master: false,
+          ativo: true
+        })
+        .select()
+        .single()
+
+      novoUsuario = resultado.data
+      insertError = resultado.error
+
+      if (insertError) {
+        console.error(`❌ Tentativa ${tentativas} falhou:`, insertError.message)
+        
+        // Se for erro de chave duplicada, aguarda 500ms e tenta novamente
+        if (insertError.code === '23505' && tentativas < 3) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        } else {
+          break
+        }
+      } else {
+        console.log('✅ Usuário inserido na tabela:', novoUsuario.id)
+      }
     }
 
-    // 5. Insere na tabela usuarios
-    const { data: novoUsuario, error: insertError } = await supabaseAdmin
-      .from('usuarios')
-      .insert({
-        id: authUserId,
-        email: email,
-        nome: nome,
-        telefone: telefone,
-        endereco: endereco || null,
-        senha_hash: senhaHash,
-        is_master: false,
-        ativo: true
-      })
-      .select()
-      .single()
-
     if (insertError) {
-      console.error('❌ Erro ao inserir na tabela:', insertError)
+      console.error('❌ Falha definitiva ao inserir:', insertError)
       
       // REVERTE: deleta do Auth
       await deletarUsuarioAuth(authUserId)
       
       return NextResponse.json(
-        { erro: `Erro ao salvar dados: ${insertError.message}` },
+        { erro: `Erro ao salvar dados (${tentativas} tentativas): ${insertError.message}` },
         { status: 500 }
       )
     }
 
-    console.log('✅ Usuário salvo na tabela:', novoUsuario)
-
-    // 6. Envia email
+    // 5. Envia email
     try {
       await enviarEmailBoasVindas(email, nome, senha)
-      console.log('✅ Email enviado')
+      console.log('📧 Email de boas-vindas enviado')
     } catch (emailError: any) {
-      console.warn('⚠️ Email não enviado:', emailError.message)
+      console.warn('⚠️ Falha ao enviar email:', emailError.message)
     }
 
-    return NextResponse.json({ 
-      sucesso: true, 
-      usuario: novoUsuario 
+    return NextResponse.json({
+      mensagem: 'Usuário cadastrado com sucesso',
+      usuario: {
+        id: novoUsuario.id,
+        email: novoUsuario.email,
+        nome: novoUsuario.nome,
+        telefone: novoUsuario.telefone
+      }
     }, { status: 201 })
 
   } catch (error: any) {
-    console.error('❌ Erro no POST /api/usuarios:', error)
+    console.error('❌ Erro geral no POST /api/usuarios:', error)
     
     // Se criou no Auth mas falhou depois, tenta reverter
     if (authUserId) {
@@ -275,7 +294,7 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { erro: error.message || 'Erro interno do servidor' },
+      { erro: error.message || 'Erro ao processar cadastro' },
       { status: 500 }
     )
   }
