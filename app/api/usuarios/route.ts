@@ -14,6 +14,19 @@ const supabaseAdmin = createClient(
   }
 )
 
+function formatarTelefone(tel: string): string {
+  const digitos = tel.replace(/\D/g, '')
+
+  if (digitos.length === 11) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`
+  }
+  if (digitos.length === 10) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`
+  }
+
+  return tel
+}
+
 async function criarUsuarioViaAPI(
   email: string,
   senha: string,
@@ -133,6 +146,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Formata o telefone antes de qualquer uso
+    const telefoneFormatado = formatarTelefone(telefone)
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -204,7 +220,7 @@ export async function POST(request: NextRequest) {
         email,
         senha,
         nome,
-        telefone,
+        telefoneFormatado,
         endereco,
         senhaHash,
         user.id
@@ -255,7 +271,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 5. Verifica se os campos foram populados corretamente
+    // 5. Verifica se os campos foram populados corretamente, senão atualiza
     if (!novoUsuario.nome || !novoUsuario.senha_hash) {
       console.error('⚠️ Registro incompleto, atualizando manualmente...')
 
@@ -263,7 +279,7 @@ export async function POST(request: NextRequest) {
         .from('usuarios')
         .update({
           nome: nome,
-          telefone: telefone,
+          telefone: telefoneFormatado,
           endereco: endereco || null,
           senha_hash: senhaHash,
           is_master: false,
@@ -285,37 +301,34 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('✅ Registro atualizado com sucesso:', atualizado.id)
-
-      // 6. Envia email de boas-vindas
-      try {
-        await enviarEmailBoasVindas({
-          email: email,
-          nome: nome,
-          senha: senha
-        })
-        console.log('📧 Email de boas-vindas enviado para:', email)
-      } catch (emailError) {
-        console.error('⚠️ Erro ao enviar email (não crítico):', emailError)
-      }
-
-      return NextResponse.json(atualizado)
     }
-
-    console.log('✅ Usuário completo criado pelo trigger:', novoUsuario.id)
 
     // 6. Envia email de boas-vindas
     try {
       await enviarEmailBoasVindas({
-        email: email,
-        nome: nome,
-        senha: senha
+        email,
+        nome,
+        senha,
+        telefone: telefoneFormatado
       })
       console.log('📧 Email de boas-vindas enviado para:', email)
-    } catch (emailError) {
-      console.error('⚠️ Erro ao enviar email (não crítico):', emailError)
+    } catch (emailError: any) {
+      console.error('⚠️ Falha ao enviar email (cadastro mantido):', emailError.message)
     }
 
-    return NextResponse.json(novoUsuario)
+    // 7. Retorna sucesso
+    return NextResponse.json({
+      sucesso: true,
+      mensagem: 'Usuário cadastrado com sucesso',
+      usuario: {
+        id: authUserId,
+        email,
+        nome,
+        telefone: telefoneFormatado,
+        endereco: endereco || null
+      }
+    })
+
   } catch (error: any) {
     console.error('❌ Erro geral no POST /api/usuarios:', error)
 
