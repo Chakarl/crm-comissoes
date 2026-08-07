@@ -45,6 +45,14 @@ const TIPOS_VALOR_FIXO: Record<string, number> = {
   BB_DENTAL_ANUAL: 0,
 };
 
+// ★ NOVO — tipos que NÃO geram número de proposta
+const TIPOS_SEM_NUMERO_PROPOSTA = [
+  "CONTA_PF",
+  "CONTA_PJ",
+  "PORT_SALARIO",
+  "PORT_INSS",
+];
+
 /* ─── Máscaras ─── */
 function maskCPF(v: string) {
   return v
@@ -170,9 +178,12 @@ export function PropostaForm() {
   const precisaTaxa = !TIPOS_SEM_TAXA.includes(form.tipo_proposta_codigo);
   const precisaPrazo = !TIPOS_SEM_PRAZO.includes(form.tipo_proposta_codigo);
 
-  // ★ NOVO — define se precisa digitar valor
+  // define se precisa digitar valor
   const valorFixo = TIPOS_VALOR_FIXO[form.tipo_proposta_codigo];
   const precisaValor = valorFixo === undefined;
+
+  // ★ NOVO — define se precisa de número de proposta
+  const precisaNumeroProposta = !TIPOS_SEM_NUMERO_PROPOSTA.includes(form.tipo_proposta_codigo);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -185,7 +196,6 @@ export function PropostaForm() {
     setResultado(null);
 
     try {
-      // ★ ALTERADO — usa valor fixo quando o tipo não pede input
       const valor = precisaValor ? parseBRL(form.valor_contratado) : (valorFixo ?? 0);
       if (precisaValor && valor <= 0) throw new Error("Informe um valor contratado válido.");
 
@@ -229,7 +239,7 @@ export function PropostaForm() {
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
-          numero_proposta: form.numero_proposta,
+          numero_proposta: form.numero_proposta || null,  // ★ ALTERADO — null se vazio
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
           nome_cliente: form.nome_cliente,
@@ -323,19 +333,21 @@ export function PropostaForm() {
     <div className="flex justify-center">
       <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-2xl">
 
-        {/* Nº Proposta + Data */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Nº Proposta</label>
-            <input
-              required
-              type="text"
-              value={form.numero_proposta}
-              onChange={(e) => setForm({ ...form, numero_proposta: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="Ex: 123456"
-            />
-          </div>
+        {/* ★ ALTERADO — Nº Proposta + Data (Nº Proposta oculto para tipos sem número) */}
+        <div className={`grid gap-4 ${precisaNumeroProposta ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+          {precisaNumeroProposta && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Nº Proposta</label>
+              <input
+                required
+                type="text"
+                value={form.numero_proposta}
+                onChange={(e) => setForm({ ...form, numero_proposta: e.target.value })}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Ex: 123456"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-1">Data</label>
             <input
@@ -458,7 +470,7 @@ export function PropostaForm() {
           </div>
         </div>
 
-        {/* ★ ALTERADO — Valor Contratado só aparece quando necessário */}
+        {/* Valor Contratado — só aparece quando necessário */}
         {precisaValor && (
           <div>
             <label className="block text-sm font-medium mb-1">Valor Contratado</label>
