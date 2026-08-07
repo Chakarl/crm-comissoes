@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { formatarNomeProprio } from '@/lib/formatarNome'
 
 const supabase = createClient()
 import {
@@ -19,6 +20,8 @@ import {
   Pencil,
   Trash2,
   EyeOff,
+  CheckCircle,
+  XCircle,
   X,
 } from 'lucide-react'
 
@@ -61,6 +64,17 @@ export default function CadastrarUsuarioPage() {
     role: 'promotor',
   })
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
+
+  // ✅ Estado para notificação
+  const [notificacao, setNotificacao] = useState<{
+    tipo: 'sucesso' | 'erro'
+    mensagem: string
+  } | null>(null)
+
+  function mostrarNotificacao(tipo: 'sucesso' | 'erro', mensagem: string) {
+    setNotificacao({ tipo, mensagem })
+    setTimeout(() => setNotificacao(null), 5000)
+  }
 
   // Carrega dados do usuário logado
   useEffect(() => {
@@ -115,33 +129,41 @@ export default function CadastrarUsuarioPage() {
     setLoading(true)
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password: senha,
-      })
+      const nomeFormatado = formatarNomeProprio(nome)
 
-      if (authError || !authData.user) {
-        alert('Erro ao criar usuário: ' + (authError?.message || 'Desconhecido'))
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        mostrarNotificacao('erro', 'Sessão expirada. Faça login novamente.')
         setLoading(false)
         return
       }
 
-      const { error: dbError } = await supabase.from('usuarios').insert({
-        id: authData.user.id,
-        nome,
-        email,
-        telefone,
-        endereco,
-        role: roleSelecionado,
-        criado_por: meuId,
-        ativo: true,
+      const res = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          senha,
+          nome: nomeFormatado,
+          telefone,
+          endereco,
+          role: roleSelecionado,
+          token: session.access_token,
+        }),
       })
 
-      if (dbError) {
-        alert('Erro ao salvar dados: ' + dbError.message)
+      const data = await res.json()
+
+      if (!res.ok) {
+        mostrarNotificacao('erro', data.erro || 'Erro ao cadastrar usuário')
         setLoading(false)
         return
       }
+
+      mostrarNotificacao('sucesso', `Usuário "${nomeFormatado}" cadastrado com sucesso! Email de boas-vindas enviado.`)
 
       setNome('')
       setEmail('')
@@ -150,6 +172,8 @@ export default function CadastrarUsuarioPage() {
       setSenha(gerarSenha())
       setRoleSelecionado('promotor')
       carregarUsuarios()
+    } catch (err: any) {
+      mostrarNotificacao('erro', err.message || 'Erro inesperado ao cadastrar')
     } finally {
       setLoading(false)
     }
@@ -188,10 +212,12 @@ export default function CadastrarUsuarioPage() {
     if (!editando) return
     setSalvandoEdicao(true)
 
+    const nomeFormatado = formatarNomeProprio(editForm.nome)
+
     const { error } = await supabase
       .from('usuarios')
       .update({
-        nome: editForm.nome,
+        nome: nomeFormatado,
         telefone: editForm.telefone,
         endereco: editForm.endereco,
         role: editForm.role,
@@ -256,6 +282,27 @@ export default function CadastrarUsuarioPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* ✅ Notificação flutuante */}
+      {notificacao && (
+        <div
+          className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all animate-in fade-in slide-in-from-top-2 ${
+            notificacao.tipo === 'sucesso'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {notificacao.tipo === 'sucesso' ? (
+            <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+          ) : (
+            <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+          )}
+          {notificacao.mensagem}
+          <button onClick={() => setNotificacao(null)} className="ml-2 hover:opacity-70">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -316,6 +363,7 @@ export default function CadastrarUsuarioPage() {
                 type="text"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
+                onBlur={() => setNome(formatarNomeProprio(nome))}
                 placeholder="Nome do usuário"
                 className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
@@ -541,6 +589,9 @@ export default function CadastrarUsuarioPage() {
                 type="text"
                 value={editForm.nome}
                 onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })}
+                onBlur={() =>
+                  setEditForm({ ...editForm, nome: formatarNomeProprio(editForm.nome) })
+                }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm"
                 required
               />
