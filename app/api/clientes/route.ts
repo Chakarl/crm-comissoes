@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { formatarNomeProprio } from '@/lib/formatarNome'
 
 function getSupabase() {
   const cookieStore = cookies()
@@ -104,10 +105,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const nomeFormatado = formatarNomeProprio(nome)
+
   const { data, error } = await supabase
     .from('clientes')
     .insert({
-      nome,
+      nome: nomeFormatado,
       cpf,
       telefone,
       agencia,

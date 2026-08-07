@@ -7,6 +7,7 @@ import { calcularComissao } from "@/lib/calcularComissao";
 import { gerarParcelasConsorcio, gerarParcelaUnica } from "@/lib/gerarParcelas";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle, UserPlus } from "lucide-react";
+import { formatarNomeProprio } from "@/lib/formatarNome";
 
 const supabase = createClient();
 
@@ -232,7 +233,7 @@ export function PropostaForm() {
           const { data: novoCli, error: errCli } = await supabase
             .from("clientes")
             .insert({
-              nome: form.nome_cliente,
+              nome: formatarNomeProprio(form.nome_cliente),
               cpf: cpfMascara,
               telefone: form.telefone_cliente.replace(/\D/g, "") || null,
               agencia: form.agencia_cliente || null,
@@ -254,7 +255,7 @@ export function PropostaForm() {
           numero_proposta: form.numero_proposta.trim() || "",
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
-          nome_cliente: form.nome_cliente,
+          nome_cliente: formatarNomeProprio(form.nome_cliente),
           cpf_cliente: cpfMascara || null,
           telefone_cliente: form.telefone_cliente.replace(/\D/g, "") || null,
           agencia_cliente: form.agencia_cliente || null,
