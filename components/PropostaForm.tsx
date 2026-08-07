@@ -31,6 +31,20 @@ const TIPOS_SEM_PRAZO = [
   "BB_DENTAL_ANUAL","CONSORCIO_IMOVEL","CONSORCIO_GERAL",
 ];
 
+const TIPOS_VALOR_FIXO: Record<string, number> = {
+  CONTA_PF: 0,
+  CONTA_PJ: 0,
+  PORT_SALARIO: 0,
+  PORT_INSS: 0,
+  CAP_UNICO_1000: 1000,
+  CAP_UNICO_2000: 2000,
+  CAP_MENSAL_4800: 4800,
+  CAP_MENSAL_7200: 7200,
+  CAP_MENSAL_3000: 3000,
+  BB_DENTAL_MENSAL: 0,
+  BB_DENTAL_ANUAL: 0,
+};
+
 /* ─── Máscaras ─── */
 function maskCPF(v: string) {
   return v
@@ -73,7 +87,6 @@ export function PropostaForm() {
   const [resultado, setResultado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // ─── Estado da busca automática de CPF ───
   const [buscandoCpf, setBuscandoCpf] = useState(false);
   const [clienteEncontrado, setClienteEncontrado] = useState(false);
   const [clienteId, setClienteId] = useState<string | null>(null);
@@ -102,7 +115,6 @@ export function PropostaForm() {
       });
   }, []);
 
-  // ─── BUSCA AUTOMÁTICA AO DIGITAR CPF ───
   useEffect(() => {
     const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
 
@@ -123,7 +135,6 @@ export function PropostaForm() {
           .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
           .limit(1);
 
-        // Usuário não-master só encontra seus próprios clientes
         if (usuario && !usuario.is_master) {
           query = query.eq("usuario_id", usuario.id);
         }
@@ -159,6 +170,10 @@ export function PropostaForm() {
   const precisaTaxa = !TIPOS_SEM_TAXA.includes(form.tipo_proposta_codigo);
   const precisaPrazo = !TIPOS_SEM_PRAZO.includes(form.tipo_proposta_codigo);
 
+  // ★ NOVO — define se precisa digitar valor
+  const valorFixo = TIPOS_VALOR_FIXO[form.tipo_proposta_codigo];
+  const precisaValor = valorFixo === undefined;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!usuario) {
@@ -170,8 +185,9 @@ export function PropostaForm() {
     setResultado(null);
 
     try {
-      const valor = parseBRL(form.valor_contratado);
-      if (valor <= 0) throw new Error("Informe um valor contratado válido.");
+      // ★ ALTERADO — usa valor fixo quando o tipo não pede input
+      const valor = precisaValor ? parseBRL(form.valor_contratado) : (valorFixo ?? 0);
+      if (precisaValor && valor <= 0) throw new Error("Informe um valor contratado válido.");
 
       const taxa = precisaTaxa ? parseFloat(form.taxa_juros) : null;
       const prazo = precisaPrazo ? parseInt(form.prazo) : null;
@@ -186,32 +202,30 @@ export function PropostaForm() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado. Faça login novamente.");
 
-      /* ─── Upsert cliente ─── */
       const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
       const cpfMascara = cpfLimpo.length === 11
-      ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
-      : "";
+        ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
+        : "";
       let idCliente = clienteId;
 
       if (cpfLimpo.length === 11 && !idCliente) {
-      const { data: novoCli, error: errCli } = await supabase
-        .from("clientes")
-        .insert({
-          nome: form.nome_cliente,
-          cpf: cpfMascara,
-          telefone: form.telefone_cliente.replace(/\D/g, "") || null,
-          agencia: form.agencia_cliente || null,
-          conta: form.conta_cliente || null,
-          data_cadastro: form.data_proposta,   // ← ADICIONE ESTA LINHA
-          usuario_id: usuario.id,
-        })
-        .select("id")
-        .single();
-      if (errCli) throw errCli;
-      idCliente = novoCli.id;
+        const { data: novoCli, error: errCli } = await supabase
+          .from("clientes")
+          .insert({
+            nome: form.nome_cliente,
+            cpf: cpfMascara,
+            telefone: form.telefone_cliente.replace(/\D/g, "") || null,
+            agencia: form.agencia_cliente || null,
+            conta: form.conta_cliente || null,
+            data_cadastro: form.data_proposta,
+            usuario_id: usuario.id,
+          })
+          .select("id")
+          .single();
+        if (errCli) throw errCli;
+        idCliente = novoCli.id;
       }
 
-      /* ─── Salva proposta ─── */
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
@@ -239,7 +253,6 @@ export function PropostaForm() {
 
       if (errProp) throw errProp;
 
-      /* ─── Parcelas ─── */
       let parcelas;
       if (calc.is_consorcio) {
         parcelas = gerarParcelasConsorcio({
@@ -445,19 +458,21 @@ export function PropostaForm() {
           </div>
         </div>
 
-        {/* Valor Contratado */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Valor Contratado</label>
-          <input
-            required
-            type="text"
-            inputMode="numeric"
-            value={form.valor_contratado}
-            onChange={(e) => setForm({ ...form, valor_contratado: maskBRL(e.target.value) })}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="R$ 0,00"
-          />
-        </div>
+        {/* ★ ALTERADO — Valor Contratado só aparece quando necessário */}
+        {precisaValor && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Valor Contratado</label>
+            <input
+              required
+              type="text"
+              inputMode="numeric"
+              value={form.valor_contratado}
+              onChange={(e) => setForm({ ...form, valor_contratado: maskBRL(e.target.value) })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="R$ 0,00"
+            />
+          </div>
+        )}
 
         {/* Taxa de Juros */}
         {precisaTaxa && (
