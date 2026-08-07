@@ -185,6 +185,11 @@ export function PropostaForm() {
   // ★ NOVO — define se precisa de número de proposta
   const precisaNumeroProposta = !TIPOS_SEM_NUMERO_PROPOSTA.includes(form.tipo_proposta_codigo);
 
+  // Validação: obrigatório para tipos que exigem número
+  if (precisaNumeroProposta && !form.numero_proposta.trim()) {
+  throw new Error("Informe o número da proposta.");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!usuario) {
@@ -239,7 +244,7 @@ export function PropostaForm() {
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
-          numero_proposta: form.numero_proposta || null,  // ★ ALTERADO — null se vazio
+          numero_proposta: form.numero_proposta.trim() || "",  // ★ ALTERADO — ""
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
           nome_cliente: form.nome_cliente,
