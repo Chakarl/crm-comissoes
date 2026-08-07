@@ -67,8 +67,9 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
       {/* ——— Linha 1: Logo + Saudação | Minha Conta + Sair ——— */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
-          {/* Esquerda */}
-          <div className="flex items-center gap-4">
+
+           {/* Esquerda */}
+          <div className="flex items-center gap-4 flex-1 lg:flex-none justify-center lg:justify-start">
             <Link href="/dashboard" className="flex-shrink-0">
               <Image
                 src="/logo.png"
