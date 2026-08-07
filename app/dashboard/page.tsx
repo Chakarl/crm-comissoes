@@ -251,6 +251,7 @@ export default function DashboardPage() {
   const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+
   const now2 = new Date()
   const mesAtualStr2 = `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`
   const proxMesLabel = mesLabel(addMeses(mesAtualStr2, 1))
@@ -538,14 +539,6 @@ export default function DashboardPage() {
                       R$ {fmt(dadosMes.recebido)}
                     </div>
                     <div className="text-xs text-emerald-500 mt-1">Consórcio 5x + outros 1x</div>
-                  </div>
-
-                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
-                    <div className="text-xs font-medium text-amber-600 mb-1">Diferença</div>
-                    <div className="text-xl sm:text-2xl font-bold text-amber-900">
-                      R$ {fmt(dadosMes.total - dadosMes.recebido)}
-                    </div>
-                    <div className="text-xs text-amber-500 mt-1">Gerado − Recebido</div>
                   </div>
                 </div>
               </div>
