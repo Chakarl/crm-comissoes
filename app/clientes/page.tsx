@@ -24,6 +24,7 @@ interface Cliente {
   telefone: string | null
   agencia: string | null
   conta: string | null
+  data_cadastro: string | null
   usuario_id: string | null
 }
 
@@ -31,7 +32,14 @@ interface ClienteComData extends Cliente {
   ultimaProposta: string | null
 }
 
-const emptyForm = { nome: '', cpf: '', telefone: '', agencia: '', conta: '' }
+const emptyForm = {
+  nome: '',
+  cpf: '',
+  telefone: '',
+  agencia: '',
+  conta: '',
+  data_cadastro: new Date().toISOString().split('T')[0],
+}
 
 export default function ClientesPage() {
   const { usuario, loading: loadingUser } = useUsuario()
@@ -47,7 +55,6 @@ export default function ClientesPage() {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  // ── Filtro por corretor (master only) ──
   const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
   const [listaCorretores, setListaCorretores] = useState<
     { id: string; nome: string }[]
@@ -140,6 +147,7 @@ export default function ClientesPage() {
       telefone: c.telefone || '',
       agencia: c.agencia || '',
       conta: c.conta || '',
+      data_cadastro: c.data_cadastro || new Date().toISOString().split('T')[0],
     })
     setShowModal(true)
   }
@@ -189,13 +197,12 @@ export default function ClientesPage() {
   })
 
   const datasDisponiveis = clientes
-    .map((c) => c.ultimaProposta || '')
+    .map((c) => c.data_cadastro || c.ultimaProposta || '')
     .filter(Boolean)
 
   const filtered = clientes.filter((c) => {
-    const matchMes =
-      !mesFiltro ||
-      (c.ultimaProposta && c.ultimaProposta.startsWith(mesFiltro))
+    const dataRef = c.data_cadastro || c.ultimaProposta || ''
+    const matchMes = !mesFiltro || dataRef.startsWith(mesFiltro)
     const matchSearch =
       c.nome?.toLowerCase().includes(search.toLowerCase()) ||
       c.cpf?.toLowerCase().includes(search.toLowerCase())
@@ -237,7 +244,7 @@ export default function ClientesPage() {
           </button>
         </div>
 
-        {/* ── Filtro por Corretor (master only) ── */}
+        {/* Filtro por Corretor (master only) */}
         {usuario?.is_master && (
           <div className="flex items-center gap-3 mb-6">
             <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -289,6 +296,9 @@ export default function ClientesPage() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Data
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Nome
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
@@ -300,13 +310,13 @@ export default function ClientesPage() {
                   </th>
                 )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Agência
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Conta
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Telefone
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Agência / Conta
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Última Proposta
                 </th>
                 <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">
                   Ações
@@ -319,6 +329,11 @@ export default function ClientesPage() {
                   key={c.id}
                   className="border-b border-slate-100 hover:bg-slate-50"
                 >
+                  <td className="px-6 py-4 text-slate-700">
+                    {c.data_cadastro
+                      ? new Date(c.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR')
+                      : '—'}
+                  </td>
                   <td className="px-6 py-4 font-medium text-slate-900">
                     {c.nome}
                   </td>
@@ -328,25 +343,18 @@ export default function ClientesPage() {
                   {usuario?.is_master && corretorFiltro === 'todos' && (
                     <td className="px-6 py-4 text-slate-700">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
-                        {(c.usuario_id && nomeCorretorMap[c.usuario_id]) ||
-                          '—'}
+                        {(c.usuario_id && nomeCorretorMap[c.usuario_id]) || '—'}
                       </span>
                     </td>
                   )}
                   <td className="px-6 py-4 text-slate-700">
+                    {c.agencia || '—'}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {c.conta || '—'}
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
                     {c.telefone || '—'}
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">
-                    {c.agencia || c.conta
-                      ? `${c.agencia || '—'} / ${c.conta || '—'}`
-                      : '—'}
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">
-                    {c.ultimaProposta
-                      ? new Date(
-                          c.ultimaProposta + 'T00:00:00'
-                        ).toLocaleDateString('pt-BR')
-                      : '—'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
@@ -359,11 +367,7 @@ export default function ClientesPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (
-                            confirm(
-                              `Excluir o cliente "${c.nome}"?`
-                            )
-                          )
+                          if (confirm(`Excluir o cliente "${c.nome}"?`))
                             handleDelete(c.id)
                         }}
                         disabled={deletando === c.id}
@@ -384,7 +388,7 @@ export default function ClientesPage() {
                 <tr>
                   <td
                     colSpan={
-                      usuario?.is_master && corretorFiltro === 'todos' ? 7 : 6
+                      (usuario?.is_master && corretorFiltro === 'todos' ? 9 : 8)
                     }
                     className="px-6 py-12 text-center text-slate-500"
                   >
@@ -442,27 +446,29 @@ export default function ClientesPage() {
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
+                  <span className="text-slate-500">Data</span>
+                  <p className="font-medium text-slate-900">
+                    {c.data_cadastro
+                      ? new Date(c.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR')
+                      : '—'}
+                  </p>
+                </div>
+                <div>
                   <span className="text-slate-500">Telefone</span>
                   <p className="font-medium text-slate-900">
                     {c.telefone || '—'}
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-500">Ag / Conta</span>
+                  <span className="text-slate-500">Agência</span>
                   <p className="font-medium text-slate-900">
-                    {c.agencia || c.conta
-                      ? `${c.agencia || '—'} / ${c.conta || '—'}`
-                      : '—'}
+                    {c.agencia || '—'}
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-500">Última Proposta</span>
+                  <span className="text-slate-500">Conta</span>
                   <p className="font-medium text-slate-900">
-                    {c.ultimaProposta
-                      ? new Date(
-                          c.ultimaProposta + 'T00:00:00'
-                        ).toLocaleDateString('pt-BR')
-                      : '—'}
+                    {c.conta || '—'}
                   </p>
                 </div>
               </div>
@@ -504,6 +510,23 @@ export default function ClientesPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Data */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Data *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.data_cadastro}
+                  onChange={(e) =>
+                    setFormData({ ...formData, data_cadastro: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+
+              {/* Nome */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Nome *
@@ -518,6 +541,8 @@ export default function ClientesPage() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
+
+              {/* CPF */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   CPF
@@ -528,22 +553,12 @@ export default function ClientesPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, cpf: e.target.value })
                   }
+                  placeholder="000.000.000-00"
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Telefone
-                </label>
-                <input
-                  type="text"
-                  value={formData.telefone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, telefone: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-              </div>
+
+              {/* Agência e Conta lado a lado */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -571,6 +586,22 @@ export default function ClientesPage() {
                     className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
+              </div>
+
+              {/* Telefone */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Telefone
+                </label>
+                <input
+                  type="text"
+                  value={formData.telefone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, telefone: e.target.value })
+                  }
+                  placeholder="(00) 00000-0000"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
               </div>
 
               <div className="flex gap-3 pt-2">
