@@ -167,7 +167,7 @@ export default function CadastrarUsuarioPage() {
   const rolesDisponiveis =
     meuRole === 'master'
       ? [
-          { value: 'supervisor', label: 'supervisor', icon: ShieldCheck },
+          { value: 'supervisor', label: 'Supervisor', icon: ShieldCheck },
           { value: 'promotor', label: 'Promotor', icon: User },
         ]
       : [{ value: 'promotor', label: 'Promotor', icon: User }]
