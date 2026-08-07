@@ -229,7 +229,7 @@ export function PropostaForm() {
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
-          numero_proposta: form.numero_proposta || null,   // ★ ALTERADO — null se vazio
+          numero_proposta: form.numero_proposta,
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
           nome_cliente: form.nome_cliente,
@@ -323,16 +323,29 @@ export function PropostaForm() {
     <div className="flex justify-center">
       <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-2xl">
 
-        {/* ★ ALTERADO — só Data, sem Nº Proposta */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Data</label>
-          <input
-            required
-            type="date"
-            value={form.data_proposta}
-            onChange={(e) => setForm({ ...form, data_proposta: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-          />
+        {/* Nº Proposta + Data */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Nº Proposta</label>
+            <input
+              required
+              type="text"
+              value={form.numero_proposta}
+              onChange={(e) => setForm({ ...form, numero_proposta: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Ex: 123456"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Data</label>
+            <input
+              required
+              type="date"
+              value={form.data_proposta}
+              onChange={(e) => setForm({ ...form, data_proposta: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
         </div>
 
         {/* Tipo de Proposta */}
@@ -445,7 +458,7 @@ export function PropostaForm() {
           </div>
         </div>
 
-        {/* ★ Valor Contratado — só aparece quando necessário */}
+        {/* ★ ALTERADO — Valor Contratado só aparece quando necessário */}
         {precisaValor && (
           <div>
             <label className="block text-sm font-medium mb-1">Valor Contratado</label>
