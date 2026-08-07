@@ -45,7 +45,6 @@ const TIPOS_VALOR_FIXO: Record<string, number> = {
   BB_DENTAL_ANUAL: 0,
 };
 
-// ★ NOVO — tipos que NÃO geram número de proposta
 const TIPOS_SEM_NUMERO_PROPOSTA = [
   "CONTA_PF",
   "CONTA_PJ",
@@ -123,58 +122,61 @@ export function PropostaForm() {
       });
   }, []);
 
+  // ★ CORREÇÃO 1 — busca CPF sem filtro de usuario_id (CPF é único global)
   useEffect(() => {
-    // ---------- CLIENTE ----------
-const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
-const cpfMascara = cpfLimpo.length === 11
-  ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
-  : "";
-let idCliente = clienteId;
+    const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
 
-if (cpfLimpo.length === 11 && !idCliente) {
-  // Tenta buscar o cliente existente primeiro (sem filtro de usuario)
-  const { data: existente } = await supabase
-    .from("clientes")
-    .select("id")
-    .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
-    .limit(1)
-    .maybeSingle();
+    if (cpfLimpo.length !== 11) {
+      setClienteEncontrado(false);
+      setClienteId(null);
+      return;
+    }
 
-  if (existente) {
-    idCliente = existente.id;
-  } else {
-    const { data: novoCli, error: errCli } = await supabase
-      .from("clientes")
-      .insert({
-        nome: form.nome_cliente,
-        cpf: cpfMascara,
-        telefone: form.telefone_cliente.replace(/\D/g, "") || null,
-        agencia: form.agencia_cliente || null,
-        conta: form.conta_cliente || null,
-        data_cadastro: form.data_proposta,
-        usuario_id: usuario.id,
-      })
-      .select("id")
-      .single();
-    if (errCli) throw errCli;
-    idCliente = novoCli.id;
-  }
-}
+    const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
+
+    const timeout = setTimeout(async () => {
+      setBuscandoCpf(true);
+      try {
+        const { data } = await supabase
+          .from("clientes")
+          .select("*")
+          .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (data) {
+          setClienteEncontrado(true);
+          setClienteId(data.id);
+          setForm((prev) => ({
+            ...prev,
+            nome_cliente: data.nome || prev.nome_cliente,
+            telefone_cliente: data.telefone ? maskTelefone(data.telefone) : prev.telefone_cliente,
+            agencia_cliente: data.agencia || prev.agencia_cliente,
+            conta_cliente: data.conta || prev.conta_cliente,
+          }));
+        } else {
+          setClienteEncontrado(false);
+          setClienteId(null);
+        }
+      } catch (err) {
+        console.error("Erro busca CPF:", err);
+        setClienteEncontrado(false);
+        setClienteId(null);
+      } finally {
+        setBuscandoCpf(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [form.cpf_cliente]);
 
   const precisaTaxa = !TIPOS_SEM_TAXA.includes(form.tipo_proposta_codigo);
   const precisaPrazo = !TIPOS_SEM_PRAZO.includes(form.tipo_proposta_codigo);
-
-  // define se precisa digitar valor
   const valorFixo = TIPOS_VALOR_FIXO[form.tipo_proposta_codigo];
   const precisaValor = valorFixo === undefined;
-
-  // ★ NOVO — define se precisa de número de proposta
   const precisaNumeroProposta = !TIPOS_SEM_NUMERO_PROPOSTA.includes(form.tipo_proposta_codigo);
 
-  // Validação: obrigatório para tipos que exigem número
-  if (precisaNumeroProposta && !form.numero_proposta.trim()) {
-  throw new Error("Informe o número da proposta.");
-  }
+  // ★ CORREÇÃO 2 — throw removido do corpo do componente; validação está dentro do handleSubmit
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -187,6 +189,11 @@ if (cpfLimpo.length === 11 && !idCliente) {
     setResultado(null);
 
     try {
+      // Validação do número de proposta
+      if (precisaNumeroProposta && !form.numero_proposta.trim()) {
+        throw new Error("Informe o número da proposta.");
+      }
+
       const valor = precisaValor ? parseBRL(form.valor_contratado) : (valorFixo ?? 0);
       if (precisaValor && valor <= 0) throw new Error("Informe um valor contratado válido.");
 
@@ -203,34 +210,48 @@ if (cpfLimpo.length === 11 && !idCliente) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado. Faça login novamente.");
 
+      // ---------- CLIENTE ----------
       const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
       const cpfMascara = cpfLimpo.length === 11
         ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
         : "";
       let idCliente = clienteId;
 
+      // ★ CORREÇÃO 3 — busca global antes de inserir pra evitar duplicate key
       if (cpfLimpo.length === 11 && !idCliente) {
-        const { data: novoCli, error: errCli } = await supabase
+        const { data: existente } = await supabase
           .from("clientes")
-          .insert({
-            nome: form.nome_cliente,
-            cpf: cpfMascara,
-            telefone: form.telefone_cliente.replace(/\D/g, "") || null,
-            agencia: form.agencia_cliente || null,
-            conta: form.conta_cliente || null,
-            data_cadastro: form.data_proposta,
-            usuario_id: usuario.id,
-          })
           .select("id")
-          .single();
-        if (errCli) throw errCli;
-        idCliente = novoCli.id;
+          .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (existente) {
+          idCliente = existente.id;
+        } else {
+          const { data: novoCli, error: errCli } = await supabase
+            .from("clientes")
+            .insert({
+              nome: form.nome_cliente,
+              cpf: cpfMascara,
+              telefone: form.telefone_cliente.replace(/\D/g, "") || null,
+              agencia: form.agencia_cliente || null,
+              conta: form.conta_cliente || null,
+              data_cadastro: form.data_proposta,
+              usuario_id: usuario.id,
+            })
+            .select("id")
+            .single();
+          if (errCli) throw errCli;
+          idCliente = novoCli.id;
+        }
       }
 
+      // ---------- PROPOSTA ----------
       const { data: proposta, error: errProp } = await supabase
         .from("propostas")
         .insert({
-          numero_proposta: form.numero_proposta.trim() || "",  // ★ ALTERADO — ""
+          numero_proposta: form.numero_proposta.trim() || "",
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
           nome_cliente: form.nome_cliente,
@@ -254,6 +275,7 @@ if (cpfLimpo.length === 11 && !idCliente) {
 
       if (errProp) throw errProp;
 
+      // ---------- PARCELAS ----------
       let parcelas;
       if (calc.is_consorcio) {
         parcelas = gerarParcelasConsorcio({
@@ -324,7 +346,7 @@ if (cpfLimpo.length === 11 && !idCliente) {
     <div className="flex justify-center">
       <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-2xl">
 
-        {/* ★ ALTERADO — Nº Proposta + Data (Nº Proposta oculto para tipos sem número) */}
+        {/* Nº Proposta + Data */}
         <div className={`grid gap-4 ${precisaNumeroProposta ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
           {precisaNumeroProposta && (
             <div>
@@ -461,7 +483,7 @@ if (cpfLimpo.length === 11 && !idCliente) {
           </div>
         </div>
 
-        {/* Valor Contratado — só aparece quando necessário */}
+        {/* Valor Contratado */}
         {precisaValor && (
           <div>
             <label className="block text-sm font-medium mb-1">Valor Contratado</label>
