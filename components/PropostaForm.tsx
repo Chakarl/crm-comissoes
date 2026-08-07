@@ -189,32 +189,26 @@ export function PropostaForm() {
       /* ─── Upsert cliente ─── */
       const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
       const cpfMascara = cpfLimpo.length === 11
-        ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
-        : "";
+      ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
+      : "";
       let idCliente = clienteId;
 
       if (cpfLimpo.length === 11 && !idCliente) {
-        const { data: novoCli, error: errCli } = await supabase
-          .from("clientes")
-          .insert({
-            nome: form.nome_cliente,
-            cpf: cpfMascara,
-            telefone: form.telefone_cliente.replace(/\D/g, "") || null,
-            agencia: form.agencia_cliente || null,
-            conta: form.conta_cliente || null,
-            usuario_id: usuario.id,
-          })
-          .select("id")
-          .single();
-        if (errCli) throw errCli;
-        idCliente = novoCli.id;
-      } else if (idCliente) {
-        await supabase.from("clientes").update({
+      const { data: novoCli, error: errCli } = await supabase
+        .from("clientes")
+        .insert({
           nome: form.nome_cliente,
+          cpf: cpfMascara,
           telefone: form.telefone_cliente.replace(/\D/g, "") || null,
           agencia: form.agencia_cliente || null,
           conta: form.conta_cliente || null,
-        }).eq("id", idCliente);
+          data_cadastro: form.data_proposta,   // ← ADICIONE ESTA LINHA
+          usuario_id: usuario.id,
+        })
+        .select("id")
+        .single();
+      if (errCli) throw errCli;
+      idCliente = novoCli.id;
       }
 
       /* ─── Salva proposta ─── */
