@@ -248,7 +248,8 @@ export default function DashboardPage() {
   const mesProximo = idxAtual < timeline.length - 1 ? timeline[idxAtual + 1].mes : null
   const dadosMes = timeline.find((m) => m.mes === mesSelecionado)
 
-  const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+  const fmt = (v: number) =>
+  v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   const now2 = new Date()
   const mesAtualStr2 = `${now2.getFullYear()}-${String(now2.getMonth() + 1).padStart(2, '0')}`
