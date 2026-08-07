@@ -93,16 +93,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 })
   }
 
-  if (cpf) {
-    const { data: existing } = await supabase
-      .from('clientes')
-      .select('id')
-      .eq('cpf', cpf)
-      .maybeSingle()
+  if (!cpf) {
+    return NextResponse.json({ error: 'CPF é obrigatório.' }, { status: 400 })
+  }
 
-    if (existing) {
-      return NextResponse.json({ error: 'CPF já cadastrado.' }, { status: 409 })
-    }
+  const { data: existing } = await supabase
+    .from('clientes')
+    .select('id')
+    .eq('cpf', cpf)
+    .maybeSingle()
+
+  if (existing) {
+    return NextResponse.json({ error: 'CPF já cadastrado.' }, { status: 409 })
   }
 
   const nomeFormatado = formatarNomeProprio(nome)

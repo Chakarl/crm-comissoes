@@ -123,7 +123,6 @@ export function PropostaForm() {
       });
   }, []);
 
-  // ★ CORREÇÃO 1 — busca CPF sem filtro de usuario_id (CPF é único global)
   useEffect(() => {
     const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
 
@@ -177,8 +176,6 @@ export function PropostaForm() {
   const precisaValor = valorFixo === undefined;
   const precisaNumeroProposta = !TIPOS_SEM_NUMERO_PROPOSTA.includes(form.tipo_proposta_codigo);
 
-  // ★ CORREÇÃO 2 — throw removido do corpo do componente; validação está dentro do handleSubmit
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!usuario) {
@@ -193,6 +190,15 @@ export function PropostaForm() {
       // Validação do número de proposta
       if (precisaNumeroProposta && !form.numero_proposta.trim()) {
         throw new Error("Informe o número da proposta.");
+      }
+
+      // ★ VALIDAÇÃO — CPF e Nome obrigatórios
+      const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
+      if (cpfLimpo.length !== 11) {
+        throw new Error("CPF é obrigatório (11 dígitos).");
+      }
+      if (!form.nome_cliente.trim()) {
+        throw new Error("Nome do cliente é obrigatório.");
       }
 
       const valor = precisaValor ? parseBRL(form.valor_contratado) : (valorFixo ?? 0);
@@ -212,14 +218,10 @@ export function PropostaForm() {
       if (!user) throw new Error("Usuário não autenticado. Faça login novamente.");
 
       // ---------- CLIENTE ----------
-      const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
-      const cpfMascara = cpfLimpo.length === 11
-        ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
-        : "";
+      const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
       let idCliente = clienteId;
 
-      // ★ CORREÇÃO 3 — busca global antes de inserir pra evitar duplicate key
-      if (cpfLimpo.length === 11 && !idCliente) {
+      if (!idCliente) {
         const { data: existente } = await supabase
           .from("clientes")
           .select("id")
@@ -256,7 +258,7 @@ export function PropostaForm() {
           data_proposta: form.data_proposta,
           tipo_proposta_codigo: form.tipo_proposta_codigo,
           nome_cliente: formatarNomeProprio(form.nome_cliente),
-          cpf_cliente: cpfMascara || null,
+          cpf_cliente: cpfMascara,
           telefone_cliente: form.telefone_cliente.replace(/\D/g, "") || null,
           agencia_cliente: form.agencia_cliente || null,
           conta_cliente: form.conta_cliente || null,
@@ -398,9 +400,12 @@ export function PropostaForm() {
 
         {/* CPF com busca automática */}
         <div>
-          <label className="block text-sm font-medium mb-1">CPF</label>
+          <label className="block text-sm font-medium mb-1">
+            CPF <span className="text-red-500">*</span>
+          </label>
           <div className="relative">
             <input
+              required
               type="text"
               inputMode="numeric"
               value={form.cpf_cliente}
