@@ -271,37 +271,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 5. Verifica se os campos foram populados corretamente, senão atualiza
-    if (!novoUsuario.nome || !novoUsuario.senha_hash) {
-      console.error('⚠️ Registro incompleto, atualizando manualmente...')
+    // 5. ✅ SEMPRE atualiza pra garantir que nome, role e demais campos estão corretos
+    const { error: updateError } = await supabaseAdmin
+      .from('usuarios')
+      .update({
+        nome: nome,
+        telefone: telefoneFormatado,
+        endereco: endereco || null,
+        senha_hash: senhaHash,
+        role: body.role || 'promotor',
+        is_master: false,
+        ativo: true,
+        criado_por: user.id
+      })
+      .eq('id', authUserId)
 
-      const { data: atualizado, error: updateError } = await supabaseAdmin
-        .from('usuarios')
-        .update({
-          nome: nome,
-          telefone: telefoneFormatado,
-          endereco: endereco || null,
-          senha_hash: senhaHash,
-          is_master: false,
-          ativo: true,
-          criado_por: user.id
-        })
-        .eq('id', authUserId)
-        .select()
-        .single()
-
-      if (updateError) {
-        console.error('❌ Falha ao atualizar registro:', updateError)
-        await deletarUsuarioAuth(authUserId)
-        await supabaseAdmin.from('usuarios').delete().eq('id', authUserId)
-        return NextResponse.json(
-          { erro: 'Erro ao completar cadastro do usuário' },
-          { status: 500 }
-        )
-      }
-
-      console.log('✅ Registro atualizado com sucesso:', atualizado.id)
+    if (updateError) {
+      console.error('❌ Falha ao atualizar registro:', updateError)
+      await deletarUsuarioAuth(authUserId)
+      await supabaseAdmin.from('usuarios').delete().eq('id', authUserId)
+      return NextResponse.json(
+        { erro: 'Erro ao completar cadastro do usuário' },
+        { status: 500 }
+      )
     }
+
+    console.log('✅ Registro atualizado com role:', body.role || 'promotor')
 
     // 6. Envia email de boas-vindas
     try {
@@ -325,7 +320,8 @@ export async function POST(request: NextRequest) {
         email,
         nome,
         telefone: telefoneFormatado,
-        endereco: endereco || null
+        endereco: endereco || null,
+        role: body.role || 'promotor'
       }
     })
 
