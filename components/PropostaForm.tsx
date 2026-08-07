@@ -124,56 +124,42 @@ export function PropostaForm() {
   }, []);
 
   useEffect(() => {
-    const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
+    // ---------- CLIENTE ----------
+const cpfLimpo = form.cpf_cliente.replace(/\D/g, "");
+const cpfMascara = cpfLimpo.length === 11
+  ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
+  : "";
+let idCliente = clienteId;
 
-    if (cpfLimpo.length !== 11) {
-      setClienteEncontrado(false);
-      setClienteId(null);
-      return;
-    }
+if (cpfLimpo.length === 11 && !idCliente) {
+  // Tenta buscar o cliente existente primeiro (sem filtro de usuario)
+  const { data: existente } = await supabase
+    .from("clientes")
+    .select("id")
+    .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+    .limit(1)
+    .maybeSingle();
 
-    const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
-
-    const timeout = setTimeout(async () => {
-      setBuscandoCpf(true);
-      try {
-        let query = supabase
-          .from("clientes")
-          .select("*")
-          .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
-          .limit(1);
-
-        if (usuario && !usuario.is_master) {
-          query = query.eq("usuario_id", usuario.id);
-        }
-
-        const { data } = await query.maybeSingle();
-
-        if (data) {
-          setClienteEncontrado(true);
-          setClienteId(data.id);
-          setForm((prev) => ({
-            ...prev,
-            nome_cliente: data.nome || prev.nome_cliente,
-            telefone_cliente: data.telefone ? maskTelefone(data.telefone) : prev.telefone_cliente,
-            agencia_cliente: data.agencia || prev.agencia_cliente,
-            conta_cliente: data.conta || prev.conta_cliente,
-          }));
-        } else {
-          setClienteEncontrado(false);
-          setClienteId(null);
-        }
-      } catch (err) {
-        console.error("Erro busca CPF:", err);
-        setClienteEncontrado(false);
-        setClienteId(null);
-      } finally {
-        setBuscandoCpf(false);
-      }
-    }, 400);
-
-    return () => clearTimeout(timeout);
-  }, [form.cpf_cliente, usuario]);
+  if (existente) {
+    idCliente = existente.id;
+  } else {
+    const { data: novoCli, error: errCli } = await supabase
+      .from("clientes")
+      .insert({
+        nome: form.nome_cliente,
+        cpf: cpfMascara,
+        telefone: form.telefone_cliente.replace(/\D/g, "") || null,
+        agencia: form.agencia_cliente || null,
+        conta: form.conta_cliente || null,
+        data_cadastro: form.data_proposta,
+        usuario_id: usuario.id,
+      })
+      .select("id")
+      .single();
+    if (errCli) throw errCli;
+    idCliente = novoCli.id;
+  }
+}
 
   const precisaTaxa = !TIPOS_SEM_TAXA.includes(form.tipo_proposta_codigo);
   const precisaPrazo = !TIPOS_SEM_PRAZO.includes(form.tipo_proposta_codigo);
