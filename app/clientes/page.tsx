@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
+import { formatarNomeProprio } from '@/lib/formatarNome' // ✅ NOVO
 import {
   Plus,
   Search,
@@ -41,6 +42,24 @@ const emptyForm = {
   data_cadastro: new Date().toISOString().split('T')[0],
 }
 
+// ✅ Máscaras
+function maskCPF(v: string) {
+  return v
+    .replace(/\D/g, '')
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
+function maskTelefone(v: string) {
+  return v
+    .replace(/\D/g, '')
+    .slice(0, 11)
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d{1,4})$/, '$1-$2')
+}
+
 export default function ClientesPage() {
   const { usuario, loading: loadingUser } = useUsuario()
   const [clientes, setClientes] = useState<ClienteComData[]>([])
@@ -53,6 +72,7 @@ export default function ClientesPage() {
   const [deletando, setDeletando] = useState<string | null>(null)
   const [formData, setFormData] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [erroForm, setErroForm] = useState<string | null>(null) // ✅ NOVO
   const supabase = createClient()
 
   const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
@@ -136,6 +156,7 @@ export default function ClientesPage() {
   const abrirNovo = () => {
     setEditando(null)
     setFormData(emptyForm)
+    setErroForm(null) // ✅
     setShowModal(true)
   }
 
@@ -149,6 +170,7 @@ export default function ClientesPage() {
       conta: c.conta || '',
       data_cadastro: c.data_cadastro || new Date().toISOString().split('T')[0],
     })
+    setErroForm(null) // ✅
     setShowModal(true)
   }
 
@@ -156,32 +178,109 @@ export default function ClientesPage() {
     setShowModal(false)
     setEditando(null)
     setFormData(emptyForm)
+    setErroForm(null) // ✅
   }
 
+  // ✅ handleSubmit REESCRITO com validação + formatação + checagem de duplicata
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!usuario) return
+    setErroForm(null)
+
+    // ── Validações ──
+    if (!formData.nome.trim()) {
+      setErroForm('Nome é obrigatório.')
+      return
+    }
+
+    const cpfLimpo = formData.cpf.replace(/\D/g, '')
+    if (cpfLimpo.length !== 11) {
+      setErroForm('CPF é obrigatório (11 dígitos).')
+      return
+    }
+
+    const cpfMascara = maskCPF(cpfLimpo)
+    const nomeFormatado = formatarNomeProprio(formData.nome)
+
     setSaving(true)
 
-    if (editando) {
-      const { error } = await supabase
-        .from('clientes')
-        .update(formData)
-        .eq('id', editando.id)
-      if (!error) {
-        fecharModal()
-        loadClientes()
+    try {
+      if (editando) {
+        // Checagem de duplicata ao editar (se CPF mudou)
+        if (cpfMascara !== editando.cpf) {
+          const { data: dup } = await supabase
+            .from('clientes')
+            .select('id')
+            .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+            .neq('id', editando.id)
+            .limit(1)
+            .maybeSingle()
+
+          if (dup) {
+            setErroForm('CPF já cadastrado para outro cliente.')
+            setSaving(false)
+            return
+          }
+        }
+
+        const { error } = await supabase
+          .from('clientes')
+          .update({
+            nome: nomeFormatado,
+            cpf: cpfMascara,
+            telefone: formData.telefone.replace(/\D/g, '') || null,
+            agencia: formData.agencia || null,
+            conta: formData.conta || null,
+            data_cadastro: formData.data_cadastro,
+          })
+          .eq('id', editando.id)
+
+        if (error) {
+          setErroForm(error.message)
+          setSaving(false)
+          return
+        }
+      } else {
+        // Checagem de duplicata ao criar
+        const { data: dup } = await supabase
+          .from('clientes')
+          .select('id')
+          .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+          .limit(1)
+          .maybeSingle()
+
+        if (dup) {
+          setErroForm('CPF já cadastrado.')
+          setSaving(false)
+          return
+        }
+
+        const { error } = await supabase
+          .from('clientes')
+          .insert([{
+            nome: nomeFormatado,
+            cpf: cpfMascara,
+            telefone: formData.telefone.replace(/\D/g, '') || null,
+            agencia: formData.agencia || null,
+            conta: formData.conta || null,
+            data_cadastro: formData.data_cadastro,
+            usuario_id: usuario.id,
+          }])
+
+        if (error) {
+          setErroForm(error.message)
+          setSaving(false)
+          return
+        }
       }
-    } else {
-      const { error } = await supabase
-        .from('clientes')
-        .insert([{ ...formData, usuario_id: usuario.id }])
-      if (!error) {
-        fecharModal()
-        loadClientes()
-      }
+
+      fecharModal()
+      loadClientes()
+    } catch (err: any) {
+      setErroForm(err.message || 'Erro inesperado.')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const handleDelete = async (id: string) => {
@@ -510,6 +609,13 @@ export default function ClientesPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* ✅ Mensagem de erro */}
+              {erroForm && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {erroForm}
+                </div>
+              )}
+
               {/* Data */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -542,18 +648,20 @@ export default function ClientesPage() {
                 />
               </div>
 
-              {/* CPF */}
+              {/* ✅ CPF — agora obrigatório e com máscara */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  CPF
+                  CPF *
                 </label>
                 <input
                   type="text"
+                  required
                   value={formData.cpf}
                   onChange={(e) =>
-                    setFormData({ ...formData, cpf: e.target.value })
+                    setFormData({ ...formData, cpf: maskCPF(e.target.value) })
                   }
                   placeholder="000.000.000-00"
+                  maxLength={14}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
@@ -588,7 +696,7 @@ export default function ClientesPage() {
                 </div>
               </div>
 
-              {/* Telefone */}
+              {/* ✅ Telefone — agora com máscara */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Telefone
@@ -597,9 +705,10 @@ export default function ClientesPage() {
                   type="text"
                   value={formData.telefone}
                   onChange={(e) =>
-                    setFormData({ ...formData, telefone: e.target.value })
+                    setFormData({ ...formData, telefone: maskTelefone(e.target.value) })
                   }
                   placeholder="(00) 00000-0000"
+                  maxLength={15}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
