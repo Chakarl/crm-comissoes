@@ -45,11 +45,11 @@ export default function CadastrarUsuarioPage() {
   const [telefone, setTelefone] = useState('')
   const [endereco, setEndereco] = useState('')
   const [senha, setSenha] = useState(gerarSenha())
-  const [roleSelecionado, setRoleSelecionado] = useState('corretor')
+  const [roleSelecionado, setRoleSelecionado] = useState('promotor')
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(false)
   const [meuId, setMeuId] = useState<string | null>(null)
-  const [meuRole, setMeuRole] = useState<string>('corretor')
+  const [meuRole, setMeuRole] = useState<string>('promotor')
 
   // Carrega dados do usuário logado
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function CadastrarUsuarioPage() {
       if (perfil.is_master) {
         setMeuRole('master')
       } else {
-        setMeuRole(perfil.role || 'corretor')
+        setMeuRole(perfil.role || 'promotor')
       }
     }
   }
@@ -89,8 +89,8 @@ export default function CadastrarUsuarioPage() {
       .select('id, nome, email, telefone, endereco, role, ativo, criado_por')
       .order('nome')
 
-    if (meuRole === 'gerente') {
-      // Gerente só vê quem ele cadastrou
+    if (meuRole === 'supervisor') {
+      // Supervisor só vê quem ele cadastrou
       query = query.eq('criado_por', meuId!)
     }
     // Master vê todos (sem filtro extra)
@@ -141,7 +141,7 @@ export default function CadastrarUsuarioPage() {
       setTelefone('')
       setEndereco('')
       setSenha(gerarSenha())
-      setRoleSelecionado('corretor')
+      setRoleSelecionado('promotor')
       carregarUsuarios()
     } finally {
       setLoading(false)
@@ -167,10 +167,10 @@ export default function CadastrarUsuarioPage() {
   const rolesDisponiveis =
     meuRole === 'master'
       ? [
-          { value: 'gerente', label: 'Gerente', icon: ShieldCheck },
-          { value: 'corretor', label: 'Corretor', icon: User },
+          { value: 'supervisor', label: 'supervisor', icon: ShieldCheck },
+          { value: 'promotor', label: 'Promotor', icon: User },
         ]
-      : [{ value: 'corretor', label: 'Corretor', icon: User }]
+      : [{ value: 'promotor', label: 'Promotor', icon: User }]
 
   function getRoleBadge(role: string) {
     switch (role) {
@@ -180,23 +180,23 @@ export default function CadastrarUsuarioPage() {
             <Shield className="w-3 h-3" /> MASTER
           </span>
         )
-      case 'gerente':
+      case 'supervisor':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-300">
-            <ShieldCheck className="w-3 h-3" /> GERENTE
+            <ShieldCheck className="w-3 h-3" /> SUPERVISOR
           </span>
         )
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300">
-            <User className="w-3 h-3" /> CORRETOR
+            <User className="w-3 h-3" /> PROMOTOR
           </span>
         )
     }
   }
 
-  // Corretor não acessa essa página
-  if (meuRole === 'corretor') {
+  // Promotor não acessa essa página
+  if (meuRole === 'promotor') {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-slate-500 text-lg">Você não tem permissão para acessar esta página.</p>

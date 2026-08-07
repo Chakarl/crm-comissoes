@@ -55,33 +55,33 @@ export default function ClientesPage() {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<
+  const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
+  const [listaPromotores, setListaPromotores] = useState<
     { id: string; nome: string }[]
   >([])
 
   useEffect(() => {
     if (usuario) {
-      if (usuario.is_master) carregarCorretores()
+      if (usuario.is_master) carregarPromotores()
       loadClientes()
     }
   }, [usuario])
 
   useEffect(() => {
     if (usuario) loadClientes()
-  }, [corretorFiltro])
+  }, [promotorFiltro])
 
   useEffect(() => {
     setPagina(1)
   }, [search, mesFiltro])
 
-  const carregarCorretores = async () => {
+  const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
     if (usuarios) {
-      const corretores = usuarios
+      const Promotores = usuarios
         .filter((u: any) => !u.is_master)
         .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
-      setListaCorretores(corretores)
+      setListaPromotores(Promotores)
     }
   }
 
@@ -96,8 +96,8 @@ export default function ClientesPage() {
 
     if (!usuario.is_master) {
       queryClientes = queryClientes.eq('usuario_id', usuario.id)
-    } else if (corretorFiltro !== 'todos') {
-      queryClientes = queryClientes.eq('usuario_id', corretorFiltro)
+    } else if (promotorFiltro !== 'todos') {
+      queryClientes = queryClientes.eq('usuario_id', promotorFiltro)
     }
 
     let queryPropostas = supabase
@@ -106,8 +106,8 @@ export default function ClientesPage() {
 
     if (!usuario.is_master) {
       queryPropostas = queryPropostas.eq('usuario_id', usuario.id)
-    } else if (corretorFiltro !== 'todos') {
-      queryPropostas = queryPropostas.eq('usuario_id', corretorFiltro)
+    } else if (promotorFiltro !== 'todos') {
+      queryPropostas = queryPropostas.eq('usuario_id', promotorFiltro)
     }
 
     const { data: clientesData } = await queryClientes
@@ -191,9 +191,9 @@ export default function ClientesPage() {
     setDeletando(null)
   }
 
-  const nomeCorretorMap: Record<string, string> = {}
-  listaCorretores.forEach((c) => {
-    nomeCorretorMap[c.id] = c.nome
+  const nomePromotorMap: Record<string, string> = {}
+  listaPromotores.forEach((c) => {
+    nomePromotorMap[c.id] = c.nome
   })
 
   const datasDisponiveis = clientes
@@ -244,23 +244,23 @@ export default function ClientesPage() {
           </button>
         </div>
 
-        {/* Filtro por Corretor (master only) */}
+        {/* Filtro por Promotor (master only) */}
         {usuario?.is_master && (
           <div className="flex items-center gap-3 mb-6">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <UsersIcon className="w-4 h-4 text-violet-500" />
-              <span className="font-medium">Corretor:</span>
+              <span className="font-medium">Promotor:</span>
             </div>
             <select
-              value={corretorFiltro}
+              value={promotorFiltro}
               onChange={(e) => {
-                setCorretorFiltro(e.target.value)
+                setPromotorFiltro(e.target.value)
                 setPagina(1)
               }}
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="todos">Todos os Corretores</option>
-              {listaCorretores.map((c) => (
+              <option value="todos">Todos os Promotores</option>
+              {listaPromotores.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
@@ -304,9 +304,9 @@ export default function ClientesPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   CPF
                 </th>
-                {usuario?.is_master && corretorFiltro === 'todos' && (
+                {usuario?.is_master && promotorFiltro === 'todos' && (
                   <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                    Corretor
+                    Promotor
                   </th>
                 )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
@@ -340,10 +340,10 @@ export default function ClientesPage() {
                   <td className="px-6 py-4 text-slate-700">
                     {c.cpf || '—'}
                   </td>
-                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                  {usuario?.is_master && promotorFiltro === 'todos' && (
                     <td className="px-6 py-4 text-slate-700">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
-                        {(c.usuario_id && nomeCorretorMap[c.usuario_id]) || '—'}
+                        {(c.usuario_id && nomePromotorMap[c.usuario_id]) || '—'}
                       </span>
                     </td>
                   )}
@@ -388,7 +388,7 @@ export default function ClientesPage() {
                 <tr>
                   <td
                     colSpan={
-                      (usuario?.is_master && corretorFiltro === 'todos' ? 9 : 8)
+                      (usuario?.is_master && promotorFiltro === 'todos' ? 9 : 8)
                     }
                     className="px-6 py-12 text-center text-slate-500"
                   >
@@ -415,9 +415,9 @@ export default function ClientesPage() {
                 <div>
                   <h3 className="font-semibold text-slate-900">{c.nome}</h3>
                   <p className="text-sm text-slate-500">{c.cpf || 'Sem CPF'}</p>
-                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                  {usuario?.is_master && promotorFiltro === 'todos' && (
                     <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
-                      {(c.usuario_id && nomeCorretorMap[c.usuario_id]) || '—'}
+                      {(c.usuario_id && nomePromotorMap[c.usuario_id]) || '—'}
                     </span>
                   )}
                 </div>

@@ -31,33 +31,33 @@ export default function PropostasPage() {
   const [mesFiltro, setMesFiltro] = useState<string | null>(null)
   const supabase = createClient()
 
-  // ── Filtro por corretor (master only) ──
-  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
+  // ── Filtro por Promotor (master only) ──
+  const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
+  const [listaPromotores, setListaPromotores] = useState<{ id: string; nome: string }[]>([])
 
   useEffect(() => {
     if (usuario) {
-      if (usuario.is_master) carregarCorretores()
+      if (usuario.is_master) carregarPromotores()
       loadPropostas()
     }
   }, [usuario])
 
-  // Recarrega propostas quando muda o filtro de corretor
+  // Recarrega propostas quando muda o filtro de Promotor
   useEffect(() => {
     if (usuario) loadPropostas()
-  }, [corretorFiltro])
+  }, [promotorFiltro])
 
   useEffect(() => {
     setPagina(1)
   }, [search, mesFiltro])
 
-  const carregarCorretores = async () => {
+  const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
     if (usuarios) {
-      const corretores = usuarios
+      const promotores = usuarios
         .filter((u: any) => !u.is_master)
         .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
-      setListaCorretores(corretores)
+      setListaPromotores(promotores)
     }
   }
 
@@ -74,8 +74,8 @@ export default function PropostasPage() {
 
     if (!usuario.is_master) {
       query = query.eq('usuario_id', usuario.id)
-    } else if (corretorFiltro !== 'todos') {
-      query = query.eq('usuario_id', corretorFiltro)
+    } else if (promotorFiltro !== 'todos') {
+      query = query.eq('usuario_id', promotorFiltro)
     }
 
     const { data, error } = await query
@@ -103,9 +103,9 @@ export default function PropostasPage() {
     }
   }
 
-  // Mapa de nomes dos corretores para exibição
-  const nomeCorretorMap: Record<string, string> = {}
-  listaCorretores.forEach((c) => { nomeCorretorMap[c.id] = c.nome })
+  // Mapa de nomes dos promotores para exibição
+  const nomePromotorMap: Record<string, string> = {}
+  listaPromotores.forEach((c) => { nomePromotorMap[c.id] = c.nome })
 
   const filtered = propostas.filter((p) => {
     const matchMes = !mesFiltro || p.data_proposta?.startsWith(mesFiltro)
@@ -150,23 +150,23 @@ export default function PropostasPage() {
           </Link>
         </div>
 
-        {/* ── Filtro por Corretor (master only) ── */}
+        {/* ── Filtro por Promotor (master only) ── */}
         {usuario?.is_master && (
           <div className="flex items-center gap-3 mb-6">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <Users className="w-4 h-4 text-violet-500" />
-              <span className="font-medium">Corretor:</span>
+              <span className="font-medium">Promotor:</span>
             </div>
             <select
-              value={corretorFiltro}
+              value={promotorFiltro}
               onChange={(e) => {
-                setCorretorFiltro(e.target.value)
+                setPromotorFiltro(e.target.value)
                 setPagina(1)
               }}
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="todos">Todos os Corretores</option>
-              {listaCorretores.map((c) => (
+              <option value="todos">Todos os Promotores</option>
+              {listaPromotores.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
@@ -207,9 +207,9 @@ export default function PropostasPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Cliente
                 </th>
-                {usuario?.is_master && corretorFiltro === 'todos' && (
+                {usuario?.is_master && promotorFiltro === 'todos' && (
                   <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                    Corretor
+                    Promotor
                   </th>
                 )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
@@ -241,9 +241,9 @@ export default function PropostasPage() {
                   <td className="px-6 py-4 text-slate-700">
                     {p.nome_cliente}
                   </td>
-                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                  {usuario?.is_master && promotorFiltro === 'todos' && (
                     <td className="px-6 py-4 text-slate-600 text-sm">
-                      {nomeCorretorMap[p.usuario_id] || '—'}
+                      {nomePromotorMap[p.usuario_id] || '—'}
                     </td>
                   )}
                   <td className="px-6 py-4">
@@ -291,7 +291,7 @@ export default function PropostasPage() {
               {fatia.length === 0 && (
                 <tr>
                   <td
-                    colSpan={usuario?.is_master && corretorFiltro === 'todos' ? 8 : 7}
+                    colSpan={usuario?.is_master && promotorFiltro === 'todos' ? 8 : 7}
                     className="px-6 py-12 text-center text-slate-500"
                   >
                     Nenhuma proposta encontrada.
@@ -322,9 +322,9 @@ export default function PropostasPage() {
                   <div className="text-sm font-semibold text-slate-900">
                     {p.nome_cliente}
                   </div>
-                  {usuario?.is_master && corretorFiltro === 'todos' && (
+                  {usuario?.is_master && promotorFiltro === 'todos' && (
                     <div className="text-xs text-slate-500 mt-0.5">
-                      Corretor: {nomeCorretorMap[p.usuario_id] || '—'}
+                      Promotor: {nomePromotorMap[p.usuario_id] || '—'}
                     </div>
                   )}
                 </div>

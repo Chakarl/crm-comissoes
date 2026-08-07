@@ -31,9 +31,9 @@ export default function RelatoriosPage() {
   const [loading, setLoading] = useState(false)
   const [buscou, setBuscou] = useState(false)
 
-  // ── Filtro de corretor (master only) ──
-  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<
+  // ── Filtro de promotores (master only) ──
+  const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
+  const [listaPromotores, setListaPromotores] = useState<
     { id: string; nome: string }[]
   >([])
 
@@ -60,16 +60,16 @@ export default function RelatoriosPage() {
   }, [])
 
   useEffect(() => {
-    if (usuario?.is_master) carregarCorretores()
+    if (usuario?.is_master) carregarPromotores()
   }, [usuario])
 
-  const carregarCorretores = async () => {
+  const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
     if (usuarios) {
-      const corretores = usuarios
+      const promotores = usuarios
         .filter((u: any) => !u.is_master)
         .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
-      setListaCorretores(corretores)
+      setListaPromotores(promotores)
     }
   }
 
@@ -90,8 +90,8 @@ export default function RelatoriosPage() {
     // ── Aplica filtro de usuário ──
     if (!usuario.is_master) {
       query = query.eq('usuario_id', usuario.id)
-    } else if (corretorFiltro !== 'todos') {
-      query = query.eq('usuario_id', corretorFiltro)
+    } else if (promotorFiltro !== 'todos') {
+      query = query.eq('usuario_id', promotorFiltro)
     }
 
     if (tipoFiltro) {
@@ -216,7 +216,7 @@ export default function RelatoriosPage() {
             </select>
           </div>
 
-          {/* ── Filtro Corretor (master only) ── */}
+          {/* ── Filtro Promotor (master only) ── */}
           {usuario?.is_master ? (
             <div>
               <label className="block text-sm text-slate-500 mb-1">
@@ -226,12 +226,12 @@ export default function RelatoriosPage() {
                 </span>
               </label>
               <select
-                value={corretorFiltro}
-                onChange={(e) => setCorretorFiltro(e.target.value)}
+                value={promotorFiltro}
+                onChange={(e) => setPromotorFiltro(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900"
               >
-                <option value="todos">Todos os Corretores</option>
-                {listaCorretores.map((c) => (
+                <option value="todos">Todos os Promotores</option>
+                {listaPromotores.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nome}
                   </option>

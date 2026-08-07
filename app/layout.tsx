@@ -17,7 +17,7 @@ export default function RootLayout({
   const [user, setUser] = useState<any>(null)
   const [nomeUsuario, setNomeUsuario] = useState('')
   const [isMaster, setIsMaster] = useState(false)
-  const [userRole, setUserRole] = useState<string>('corretor')
+  const [userRole, setUserRole] = useState<string>('promotor')
   const [loading, setLoading] = useState(true)
 
   const carregarDadosUsuario = async (userId: string, email?: string) => {
@@ -28,7 +28,7 @@ export default function RootLayout({
       .single()
 
     setIsMaster(userData?.is_master || false)
-    setUserRole(userData?.role || 'corretor')
+    setUserRole(userData?.role || 'promotor')
     setNomeUsuario(userData?.nome || email || 'Usuário')
   }
 
@@ -62,7 +62,7 @@ export default function RootLayout({
         await carregarDadosUsuario(session.user.id, session.user.email)
       } else {
         setIsMaster(false)
-        setUserRole('corretor')
+        setUserRole('promotor')
         setNomeUsuario('')
       }
 

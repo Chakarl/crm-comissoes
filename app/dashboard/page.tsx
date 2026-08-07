@@ -91,16 +91,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   // Master-only
-  const [totalCorretores, setTotalCorretores] = useState(0)
-  const [rankingCorretores, setRankingCorretores] = useState<
+  const [totalPromotores, setTotalPromotores] = useState(0)
+  const [rankingPromotores, setRankingPromotores] = useState<
     { usuario_id: string; nome: string; propostas: number; comissao: number }[]
   >([])
-  const [corretorFiltro, setCorretorFiltro] = useState<string>('todos')
-  const [listaCorretores, setListaCorretores] = useState<{ id: string; nome: string }[]>([])
+  const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
+  const [listaPromotores, setListaPromotores] = useState<{ id: string; nome: string }[]>([])
 
   useEffect(() => {
     if (!loadingUser && usuario) loadDashboard()
-  }, [loadingUser, usuario, corretorFiltro])
+  }, [loadingUser, usuario, promotorFiltro])
 
   const loadDashboard = async () => {
     if (!usuario) return
@@ -113,7 +113,7 @@ export default function DashboardPage() {
       const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}`
       const proxMesStr = addMeses(mesAtualStr, 1)
 
-      // ── Corretores (master only) ──
+      // ── Promotores (master only) ──
       let todosUsuariosLocal: { id: string; nome: string; is_master: boolean }[] = []
 
       if (usuario.is_master) {
@@ -122,9 +122,9 @@ export default function DashboardPage() {
 
         if (usuarios) {
           todosUsuariosLocal = usuarios
-          const corretores = usuarios.filter((u: any) => !u.is_master)
-          setListaCorretores(corretores.map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' })))
-          setTotalCorretores(corretores.length)
+          const promotores = usuarios.filter((u: any) => !u.is_master)
+          setListaPromotores(promotores.map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' })))
+          setTotalPromotores(promotores.length)
         }
       }
 
@@ -138,8 +138,8 @@ export default function DashboardPage() {
 
       if (!usuario.is_master) {
         query = query.eq('usuario_id', usuario.id)
-      } else if (corretorFiltro !== 'todos') {
-        query = query.eq('usuario_id', corretorFiltro)
+      } else if (promotorFiltro !== 'todos') {
+        query = query.eq('usuario_id', promotorFiltro)
       }
 
       const { data: todas } = await query
@@ -160,8 +160,8 @@ export default function DashboardPage() {
         })
         setComissaoAno(doAno.reduce((acc, p) => acc + (p.comissao_total || 0), 0))
 
-        // ── Ranking corretores (master, visão todos) ──
-        if (usuario.is_master && corretorFiltro === 'todos') {
+        // ── Ranking Promotores (master, visão todos) ──
+        if (usuario.is_master && promotorFiltro === 'todos') {
           const mapaRank: Record<
             string,
             { usuario_id: string; nome: string; propostas: number; comissao: number }
@@ -182,7 +182,7 @@ export default function DashboardPage() {
               mapaRank[uid].comissao += p.comissao_total || 0
             }
           }
-          setRankingCorretores(
+          setRankingPromotores(
             Object.values(mapaRank).sort((a, b) => b.comissao - a.comissao)
           )
         }
@@ -343,24 +343,24 @@ export default function DashboardPage() {
           })}
         </div>
 
-        {/* ── Filtro + Corretores Ativos (master only) ── */}
+        {/* ── Filtro + Promotores Ativos (master only) ── */}
         {usuario?.is_master && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 sm:mb-8">
             <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3">
               <Users className="w-5 h-5 text-violet-500" />
               <div>
-                <div className="text-xs text-slate-500">Corretores Ativos</div>
-                <div className="text-lg font-bold text-slate-900">{totalCorretores}</div>
+                <div className="text-xs text-slate-500">Promotores Ativos</div>
+                <div className="text-lg font-bold text-slate-900">{totalPromotores}</div>
               </div>
             </div>
 
             <select
-              value={corretorFiltro}
-              onChange={(e) => setCorretorFiltro(e.target.value)}
+              value={promotorFiltro}
+              onChange={(e) => setPromotorFiltro(e.target.value)}
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
             >
-              <option value="todos">Todos os Corretores</option>
-              {listaCorretores.map((c) => (
+              <option value="todos">Todos os Promotores</option>
+              {listaPromotores.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
@@ -546,15 +546,15 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Ranking Corretores (master only) ── */}
-        {usuario?.is_master && corretorFiltro === 'todos' && rankingCorretores.length > 0 && (
+        {/* ── Ranking Promotores (master only) ── */}
+        {usuario?.is_master && promotorFiltro === 'todos' && rankingPromotores.length > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 mb-6 sm:mb-8">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
               <h2 className="text-base sm:text-lg font-semibold text-slate-900">🏆 Ranking de Corretores</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">Por comissão gerada no ano</p>
             </div>
             <div className="divide-y divide-slate-100">
-              {rankingCorretores.map((c, idx) => (
+              {rankingPromotores.map((c, idx) => (
                 <div key={c.usuario_id} className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
                   <div className="flex items-center gap-3">
                     <div

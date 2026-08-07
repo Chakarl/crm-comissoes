@@ -55,8 +55,8 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/propostas', label: 'Propostas', icon: FileText },
   { href: '/clientes', label: 'Clientes', icon: Users },
-  // Master e Gerente veem "Cadastrar Usuário"; Corretor vê "Renovações"
-  ...(userRole === 'master' || userRole === 'gerente'
+  // Master e Supervisor veem "Cadastrar Usuário"; Promotor vê "Renovações"
+  ...(userRole === 'master' || userRole === 'supervisor'
     ? [{ href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }]
     : [{ href: '/renovacoes', label: 'Renovações', icon: Bell }]),
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
