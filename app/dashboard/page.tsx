@@ -526,21 +526,21 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                    <div className="text-xs font-medium text-blue-600 mb-1">Total Gerado</div>
-                    <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
-                    <div className="text-xs text-blue-500 mt-1">{dadosMes.qtd} proposta(s)</div>
-                  </div>
-
-                  <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-                    <div className="text-xs font-medium text-emerald-600 mb-1">Recebido</div>
-                    <div className="text-xl sm:text-2xl font-bold text-emerald-900">
-                      R$ {fmt(dadosMes.recebido)}
-                    </div>
-                    <div className="text-xs text-emerald-500 mt-1">Consórcio 5x + outros 1x</div>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 text-center">
+                  <div className="text-xs font-medium text-blue-600 mb-1">Total Gerado</div>
+                  <div className="text-xl sm:text-2xl font-bold text-blue-900">R$ {fmt(dadosMes.total)}</div>
+                  <div className="text-xs text-blue-500 mt-1">{dadosMes.qtd} proposta(s)</div>
                 </div>
+
+                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 text-center">
+                  <div className="text-xs font-medium text-emerald-600 mb-1">Recebido</div>
+                  <div className="text-xl sm:text-2xl font-bold text-emerald-900">
+                    R$ {fmt(dadosMes.recebido)}
+                  </div>
+                  <div className="text-xs text-emerald-500 mt-1">Consórcio 5x + outros 1x</div>
+                </div>
+              </div>
               </div>
             )}
           </div>
