@@ -1,26 +1,28 @@
 import nodemailer from 'nodemailer'
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+  service: 'gmail',
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
   },
 })
 
-export async function enviarEmailBoasVindas(
-  email: string,
-  nome: string,
+interface EmailBoasVindas {
+  email: string
+  nome: string
   senha: string
-) {
-  const linkPlataforma = 'https://crm-comissoes-nine.vercel.app'
+  telefone: string
+}
+
+export async function enviarEmailBoasVindas({ email, nome, senha, telefone }: EmailBoasVindas) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crm-comissoes-nine.vercel.app'
+  const linkPlataforma = `${appUrl}/login`
 
   await transporter.sendMail({
-    from: `"Sistema de Comissões" <${process.env.SMTP_USER}>`,
+    from: `"Potencial" <${process.env.GMAIL_USER}>`,
     to: email,
-    subject: '🎉 Bem-vindo ao Sistema de Comissões!',
+    subject: '🎉 Bem-vindo ao Sistema!',
     html: `
       <!DOCTYPE html>
       <html>
