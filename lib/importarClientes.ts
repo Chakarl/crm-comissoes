@@ -43,7 +43,6 @@ function maskCPF(v: string): string {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
-// ── Formatar nome próprio (DENTRO do parser) ──
 function formatarNome(nome: string): string {
   const preposicoes = new Set(['de', 'da', 'do', 'das', 'dos', 'e'])
   return nome
@@ -58,7 +57,6 @@ function formatarNome(nome: string): string {
     .join(' ')
 }
 
-// ── Normalizar data ──
 function normalizarData(valor: any): string | null {
   if (valor == null || valor === '') return null
 
@@ -87,14 +85,11 @@ function normalizarData(valor: any): string | null {
   return null
 }
 
-// ── Encontrar coluna (MATCH EXATO, sem ambiguidade) ──
 function encontrarColuna(headers: string[], possibilidades: string[]): number {
-  // Passa 1: match exato
   for (let i = 0; i < headers.length; i++) {
     const h = headers[i]
     if (possibilidades.includes(h)) return i
   }
-  // Passa 2: startsWith (fallback)
   for (let i = 0; i < headers.length; i++) {
     const h = headers[i]
     if (possibilidades.some((p) => h.startsWith(p))) return i
@@ -109,7 +104,22 @@ function extrairValor(row: any[], index: number): string {
   return String(val).trim()
 }
 
-// ── Parser XML ──
+// ★ DETECÇÃO INTELIGENTE: classifica valor como telefone, agência ou conta
+function classificarCampo(valor: string): 'telefone' | 'agencia' | 'conta' | 'vazio' {
+  if (!valor || valor === '') return 'vazio'
+  const nums = valor.replace(/\D/g, '')
+
+  // Telefone: 10 ou 11 dígitos puros, ou formato (XX) XXXXX-XXXX
+  if (nums.length >= 10 && nums.length <= 11) return 'telefone'
+  if (/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(valor)) return 'telefone'
+
+  // Agência: 4-5 dígitos opcionalmente com -X no final
+  if (/^\d{4,5}(-\d)?$/.test(valor.replace(/\s/g, ''))) return 'agencia'
+
+  // Conta: qualquer outro numérico
+  return 'conta'
+}
+
 function parseXML(xmlString: string): any[][] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(xmlString, 'text/xml')
@@ -125,7 +135,6 @@ function parseXML(xmlString: string): any[][] {
   return result
 }
 
-// ── Função principal ──
 export async function parsarArquivoClientes(
   file: File
 ): Promise<ClienteImportado[]> {
@@ -176,7 +185,6 @@ export async function parsarArquivoClientes(
 
   if (rawData.length < 2) return []
 
-  // ── Mapear headers (tudo minúsculo + trim + remove acentos) ──
   const headers = rawData[0].map((h: any) =>
     String(h || '')
       .toLowerCase()
@@ -187,7 +195,6 @@ export async function parsarArquivoClientes(
 
   console.log('[IMPORT] Headers:', headers)
 
-  // ★ Ordem importa: telefone DEPOIS de conta, sem conflito
   const colData = encontrarColuna(headers, ['data', 'date', 'data_cadastro', 'data cadastro'])
   const colNome = encontrarColuna(headers, ['nome', 'name', 'cliente'])
   const colCPF = encontrarColuna(headers, ['cpf', 'cpf/cnpj', 'documento'])
@@ -198,18 +205,11 @@ export async function parsarArquivoClientes(
   console.log('[IMPORT] Índices:', { colData, colNome, colCPF, colAgencia, colConta, colTel })
 
   if (colNome < 0 || colCPF < 0) {
-    return [
-      {
-        nome: '',
-        cpf: '',
-        telefone: null,
-        agencia: null,
-        conta: null,
-        data_cadastro: null,
-        valido: false,
-        erro: 'Colunas obrigatórias não encontradas. Precisa de: Nome, CPF.',
-      },
-    ]
+    return [{
+      nome: '', cpf: '', telefone: null, agencia: null, conta: null,
+      data_cadastro: null, valido: false,
+      erro: 'Colunas obrigatórias não encontradas. Precisa de: Nome, CPF.',
+    }]
   }
 
   const resultado: ClienteImportado[] = []
@@ -219,24 +219,52 @@ export async function parsarArquivoClientes(
     const row = rawData[i]
     if (!row || row.length === 0) continue
 
-    // ★ FORMATA O NOME AQUI
     const nomeRaw = extrairValor(row, colNome)
     if (!nomeRaw) continue
     const nome = formatarNome(nomeRaw)
 
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '').padStart(11, '0')
 
-    const telefone =
-      colTel >= 0 ? extrairValor(row, colTel).replace(/\D/g, '') || null : null
-    const agencia =
-      colAgencia >= 0 ? extrairValor(row, colAgencia) || null : null
-    const conta =
-      colConta >= 0 ? extrairValor(row, colConta) || null : null
+    // ★ Extrai valores brutos das 3 colunas
+    const valAgencia = colAgencia >= 0 ? extrairValor(row, colAgencia) : ''
+    const valConta = colConta >= 0 ? extrairValor(row, colConta) : ''
+    const valTel = colTel >= 0 ? extrairValor(row, colTel) : ''
+
+    // ★ Classifica pelo CONTEÚDO, não pela posição
+    const campos = [
+      { val: valAgencia, tipo: classificarCampo(valAgencia) },
+      { val: valConta, tipo: classificarCampo(valConta) },
+      { val: valTel, tipo: classificarCampo(valTel) },
+    ]
+
+    let telefone: string | null = null
+    let agencia: string | null = null
+    let conta: string | null = null
+
+    // Primeiro: atribui os que tem classificação clara
+    for (const c of campos) {
+      if (c.tipo === 'telefone' && !telefone) {
+        telefone = c.val.replace(/\D/g, '')
+      } else if (c.tipo === 'agencia' && !agencia) {
+        agencia = c.val
+      } else if (c.tipo === 'conta' && !conta && c.val) {
+        conta = c.val
+      }
+    }
+
+    // Segundo: valores que sobraram sem classificação clara
+    for (const c of campos) {
+      if (c.val && c.val !== telefone && c.val !== agencia && c.val !== conta) {
+        if (!agencia) agencia = c.val
+        else if (!conta) conta = c.val
+        else if (!telefone) telefone = c.val.replace(/\D/g, '')
+      }
+    }
 
     let dataCadastro: string | null = null
     if (colData >= 0) dataCadastro = normalizarData(row[colData])
 
-    // CPF tamanho
+    // ── Validações ──
     if (!cpfRaw || cpfRaw.length !== 11) {
       resultado.push({
         nome, cpf: cpfRaw, telefone, agencia, conta,
@@ -246,7 +274,6 @@ export async function parsarArquivoClientes(
       continue
     }
 
-    // CPF dígitos verificadores
     if (!validarCPF(cpfRaw)) {
       resultado.push({
         nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
@@ -256,7 +283,6 @@ export async function parsarArquivoClientes(
       continue
     }
 
-    // Data obrigatória
     if (!dataCadastro) {
       resultado.push({
         nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
@@ -266,7 +292,6 @@ export async function parsarArquivoClientes(
       continue
     }
 
-    // Duplicata interna
     if (cpfsVistos.has(cpfRaw)) {
       resultado.push({
         nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
