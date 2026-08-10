@@ -16,7 +16,7 @@ export interface ClienteImportado {
 function validarCPF(cpf: string): boolean {
   const nums = cpf.replace(/\D/g, '')
   if (nums.length !== 11) return false
-  if (/^(\d)\1{10}$/.test(nums)) return false // 111.111.111-11, etc.
+  if (/^(\d)\1{10}$/.test(nums)) return false
 
   let soma = 0
   for (let i = 0; i < 9; i++) soma += parseInt(nums[i]) * (10 - i)
@@ -45,7 +45,7 @@ function maskCPF(v: string): string {
 function normalizarData(valor: any): string | null {
   if (!valor) return null
 
-  // Se for número (serial date do Excel)
+  // Serial date do Excel
   if (typeof valor === 'number') {
     const data = XLSX.SSF.parse_date_code(valor)
     if (data) {
@@ -92,7 +92,6 @@ function parseXML(text: string): any[][] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(text, 'text/xml')
 
-  // Tenta <Row> ou <row> ou <registro>
   const tagNames = ['Row', 'row', 'registro', 'cliente', 'Cliente', 'record']
   let rows: Element[] = []
 
@@ -103,7 +102,6 @@ function parseXML(text: string): any[][] {
 
   if (rows.length === 0) return []
 
-  // Pega headers do primeiro registro
   const firstRow = rows[0]
   const headers = Array.from(firstRow.children).map((el) => el.tagName)
 
@@ -126,7 +124,6 @@ export async function parsarArquivoClientes(file: File): Promise<ClienteImportad
     const text = await file.text()
     rawData = parseXML(text)
   } else {
-    // Excel ou CSV
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: false })
     const sheetName = workbook.SheetNames[0]
@@ -138,7 +135,6 @@ export async function parsarArquivoClientes(file: File): Promise<ClienteImportad
 
   const headers = rawData[0].map((h: any) => String(h || ''))
 
-  // Mapeia colunas
   const colNome = encontrarColuna(headers, ['nome', 'name', 'cliente'])
   const colCPF = encontrarColuna(headers, ['cpf', 'cpf/cnpj', 'documento'])
   const colTelefone = encontrarColuna(headers, ['telefone', 'tel', 'celular', 'fone', 'phone'])
@@ -169,7 +165,7 @@ export async function parsarArquivoClientes(file: File): Promise<ClienteImportad
     const nomeRaw = extrairValor(row, colNome)
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '')
 
-    if (!nomeRaw && !cpfRaw) continue // linha vazia
+    if (!nomeRaw && !cpfRaw) continue
 
     const nome = formatarNomeProprio(nomeRaw)
     const telefone = extrairValor(row, colTelefone).replace(/\D/g, '') || null
@@ -192,6 +188,9 @@ export async function parsarArquivoClientes(file: File): Promise<ClienteImportad
     } else if (cpfsVistos.has(cpfRaw)) {
       valido = false
       erro = 'CPF duplicado na planilha'
+    } else if (!data_cadastro) {
+      valido = false
+      erro = 'Data obrigatória (coluna "Data" vazia ou não encontrada)'
     }
 
     if (valido) cpfsVistos.add(cpfRaw)
