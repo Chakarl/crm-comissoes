@@ -13,24 +13,20 @@ export interface ClienteImportado {
   erro?: string
 }
 
-// ── Validação de CPF ──
 function validarCPF(cpf: string): boolean {
   const nums = cpf.replace(/\D/g, '')
   if (nums.length !== 11) return false
   if (/^(\d)\1{10}$/.test(nums)) return false
-
   let soma = 0
   for (let i = 0; i < 9; i++) soma += parseInt(nums[i]) * (10 - i)
   let resto = (soma * 10) % 11
   if (resto === 10) resto = 0
   if (resto !== parseInt(nums[9])) return false
-
   soma = 0
   for (let i = 0; i < 10; i++) soma += parseInt(nums[i]) * (11 - i)
   resto = (soma * 10) % 11
   if (resto === 10) resto = 0
   if (resto !== parseInt(nums[10])) return false
-
   return true
 }
 
@@ -50,49 +46,40 @@ function formatarNome(nome: string): string {
     .split(/\s+/)
     .filter(Boolean)
     .map((p, i) =>
-      i > 0 && preposicoes.has(p)
-        ? p
-        : p.charAt(0).toUpperCase() + p.slice(1)
+      i > 0 && preposicoes.has(p) ? p : p.charAt(0).toUpperCase() + p.slice(1)
     )
     .join(' ')
 }
 
 function normalizarData(valor: any): string | null {
   if (valor == null || valor === '') return null
-
   if (typeof valor === 'number') {
     const dataBase = new Date(1899, 11, 30)
     const data = new Date(dataBase.getTime() + valor * 86400000)
     if (!isNaN(data.getTime())) return data.toISOString().split('T')[0]
     return null
   }
-
   const str = String(valor).trim()
-
   const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
   if (brMatch) {
     const [, d, m, y] = brMatch
     const data = new Date(Number(y), Number(m) - 1, Number(d))
     if (!isNaN(data.getTime())) return data.toISOString().split('T')[0]
   }
-
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (isoMatch) {
     const data = new Date(str)
     if (!isNaN(data.getTime())) return data.toISOString().split('T')[0]
   }
-
   return null
 }
 
 function encontrarColuna(headers: string[], possibilidades: string[]): number {
   for (let i = 0; i < headers.length; i++) {
-    const h = headers[i]
-    if (possibilidades.includes(h)) return i
+    if (possibilidades.includes(headers[i])) return i
   }
   for (let i = 0; i < headers.length; i++) {
-    const h = headers[i]
-    if (possibilidades.some((p) => h.startsWith(p))) return i
+    if (possibilidades.some((p) => headers[i].startsWith(p))) return i
   }
   return -1
 }
@@ -104,20 +91,20 @@ function extrairValor(row: any[], index: number): string {
   return String(val).trim()
 }
 
-// ★ DETECÇÃO INTELIGENTE: classifica valor como telefone, agência ou conta
-function classificarCampo(valor: string): 'telefone' | 'agencia' | 'conta' | 'vazio' {
-  if (!valor || valor === '') return 'vazio'
+// ★★★ DETECÇÃO INTELIGENTE POR CONTEÚDO ★★★
+function parecetelefone(valor: string): boolean {
+  if (!valor) return false
   const nums = valor.replace(/\D/g, '')
+  // Telefone: 10 ou 11 dígitos, ou formato (XX) XXXXX-XXXX
+  if (nums.length === 10 || nums.length === 11) return true
+  if (/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(valor.trim())) return true
+  return false
+}
 
-  // Telefone: 10 ou 11 dígitos puros, ou formato (XX) XXXXX-XXXX
-  if (nums.length >= 10 && nums.length <= 11) return 'telefone'
-  if (/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(valor)) return 'telefone'
-
-  // Agência: 4-5 dígitos opcionalmente com -X no final
-  if (/^\d{4,5}(-\d)?$/.test(valor.replace(/\s/g, ''))) return 'agencia'
-
-  // Conta: qualquer outro numérico
-  return 'conta'
+function pareceAgencia(valor: string): boolean {
+  if (!valor) return false
+  // Agência: 4-5 dígitos, opcionalmente com -X no final
+  return /^\d{4,5}(-\d)?$/.test(valor.replace(/\s/g, ''))
 }
 
 function parseXML(xmlString: string): any[][] {
@@ -152,10 +139,8 @@ export async function parsarArquivoClientes(
       raw: true,
       cellText: false,
     })
-
     rawData = []
     let headerGlobal: any[] | null = null
-
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName]
       const sheetData: any[][] = XLSX.utils.sheet_to_json(sheet, {
@@ -163,7 +148,6 @@ export async function parsarArquivoClientes(
         raw: true,
       })
       if (sheetData.length === 0) continue
-
       if (!headerGlobal) {
         headerGlobal = sheetData[0]
         rawData = [...sheetData]
@@ -225,46 +209,52 @@ export async function parsarArquivoClientes(
 
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '').padStart(11, '0')
 
-    // ★ Extrai valores brutos das 3 colunas
-    const valAgencia = colAgencia >= 0 ? extrairValor(row, colAgencia) : ''
-    const valConta = colConta >= 0 ? extrairValor(row, colConta) : ''
-    const valTel = colTel >= 0 ? extrairValor(row, colTel) : ''
+    // ★ Pega valores brutos das 3 colunas
+    const rawAgencia = colAgencia >= 0 ? extrairValor(row, colAgencia) : ''
+    const rawConta = colConta >= 0 ? extrairValor(row, colConta) : ''
+    const rawTel = colTel >= 0 ? extrairValor(row, colTel) : ''
 
-    // ★ Classifica pelo CONTEÚDO, não pela posição
-    const campos = [
-      { val: valAgencia, tipo: classificarCampo(valAgencia) },
-      { val: valConta, tipo: classificarCampo(valConta) },
-      { val: valTel, tipo: classificarCampo(valTel) },
-    ]
-
-    let telefone: string | null = null
+    // ★ CORREÇÃO INTELIGENTE: reclassifica com base no conteúdo real
     let agencia: string | null = null
     let conta: string | null = null
+    let telefone: string | null = null
 
-    // Primeiro: atribui os que tem classificação clara
-    for (const c of campos) {
-      if (c.tipo === 'telefone' && !telefone) {
-        telefone = c.val.replace(/\D/g, '')
-      } else if (c.tipo === 'agencia' && !agencia) {
-        agencia = c.val
-      } else if (c.tipo === 'conta' && !conta && c.val) {
-        conta = c.val
-      }
+    // Junta tudo num pool pra redistribuir corretamente
+    const pool = [
+      { valor: rawAgencia, origem: 'agencia' },
+      { valor: rawConta, origem: 'conta' },
+      { valor: rawTel, origem: 'telefone' },
+    ].filter((p) => p.valor !== '')
+
+    // Primeiro: encontra o telefone (10-11 dígitos)
+    const telItem = pool.find((p) => parecetelefone(p.valor))
+    if (telItem) {
+      telefone = telItem.valor.replace(/\D/g, '')
+      pool.splice(pool.indexOf(telItem), 1)
     }
 
-    // Segundo: valores que sobraram sem classificação clara
-    for (const c of campos) {
-      if (c.val && c.val !== telefone && c.val !== agencia && c.val !== conta) {
-        if (!agencia) agencia = c.val
-        else if (!conta) conta = c.val
-        else if (!telefone) telefone = c.val.replace(/\D/g, '')
-      }
+    // Segundo: encontra a agência (4-5 dígitos com ou sem -X)
+    const agItem = pool.find((p) => pareceAgencia(p.valor))
+    if (agItem) {
+      agencia = agItem.valor
+      pool.splice(pool.indexOf(agItem), 1)
+    }
+
+    // Terceiro: o que sobrou é conta
+    if (pool.length > 0) {
+      // Se sobrou mais de 1, pega o que NÃO é telefone nem agência
+      const contaItem = pool.find((p) => !parecetelefone(p.valor) && !pareceAgencia(p.valor))
+      conta = contaItem ? contaItem.valor : pool[0].valor
+    }
+
+    // Se não achou telefone no pool mas rawTel tinha algo
+    if (!telefone && rawTel) {
+      telefone = rawTel.replace(/\D/g, '') || null
     }
 
     let dataCadastro: string | null = null
     if (colData >= 0) dataCadastro = normalizarData(row[colData])
 
-    // ── Validações ──
     if (!cpfRaw || cpfRaw.length !== 11) {
       resultado.push({
         nome, cpf: cpfRaw, telefone, agencia, conta,
@@ -278,23 +268,16 @@ export async function parsarArquivoClientes(
       resultado.push({
         nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
         data_cadastro: dataCadastro, valido: false,
-        erro: 'CPF inválido (dígitos verificadores não conferem)',
+        erro: 'CPF inválido (dígito verificador incorreto)',
       })
       continue
     }
 
-    if (!dataCadastro) {
-      resultado.push({
-        nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
-        data_cadastro: null, valido: false,
-        erro: 'Data obrigatória (coluna "Data" vazia ou formato não reconhecido)',
-      })
-      continue
-    }
+    const cpfFormatado = maskCPF(cpfRaw)
 
     if (cpfsVistos.has(cpfRaw)) {
       resultado.push({
-        nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
+        nome, cpf: cpfFormatado, telefone, agencia, conta,
         data_cadastro: dataCadastro, valido: false,
         erro: 'CPF duplicado na planilha',
       })
@@ -305,7 +288,7 @@ export async function parsarArquivoClientes(
 
     resultado.push({
       nome,
-      cpf: maskCPF(cpfRaw),
+      cpf: cpfFormatado,
       telefone,
       agencia,
       conta,
