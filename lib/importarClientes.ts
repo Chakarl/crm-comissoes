@@ -79,26 +79,17 @@ function normalizarData(valor: any): string | null {
     }
   }
 
-  // mm/dd/yyyy fallback
-  const usMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
-  if (usMatch) {
-    const [, m, d, y] = usMatch
-    if (Number(m) <= 12 && Number(d) <= 31) {
-      const data = new Date(Number(y), Number(m) - 1, Number(d))
-      if (!isNaN(data.getTime())) {
-        return data.toISOString().split('T')[0]
-      }
-    }
-  }
-
   return null
 }
 
 // ── Encontrar coluna pelo header ──
 function encontrarColuna(headers: string[], possibilidades: string[]): number {
-  const idx = headers.findIndex((h) =>
-    possibilidades.includes(h.toLowerCase().trim())
-  )
+  const idx = headers.findIndex((h) => {
+    const header = h.toLowerCase().trim()
+    return possibilidades.some(
+      (p) => header === p || header.startsWith(p + ':') || header.startsWith(p + ' ')
+    )
+  })
   return idx
 }
 
@@ -143,7 +134,12 @@ export async function parsarArquivoClientes(
   } else {
     // Excel ou CSV — lê TODAS as abas
     const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array', cellDates: false })
+    const workbook = XLSX.read(buffer, {
+      type: 'array',
+      cellDates: false,
+      raw: true,          // preserva valores brutos
+      cellText: false,
+    })
 
     rawData = []
     let headerGlobal: any[] | null = null
@@ -158,11 +154,9 @@ export async function parsarArquivoClientes(
       if (sheetData.length === 0) continue
 
       if (!headerGlobal) {
-        // Primeira aba: pega header + dados
         headerGlobal = sheetData[0]
         rawData = [...sheetData]
       } else {
-        // Demais abas: detecta se a primeira linha é header ou dado
         const primeiraLinha = sheetData[0]
         const pareceHeader = primeiraLinha.every(
           (cell: any) =>
@@ -171,10 +165,8 @@ export async function parsarArquivoClientes(
         )
 
         if (pareceHeader) {
-          // Pula o header, pega só os dados
           rawData.push(...sheetData.slice(1))
         } else {
-          // Não tem header, pega tudo
           rawData.push(...sheetData)
         }
       }
@@ -227,20 +219,31 @@ export async function parsarArquivoClientes(
     if (!row || row.length === 0) continue
 
     const nome = extrairValor(row, colNome)
-    const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '')
-    const telefone = colTel >= 0 ? extrairValor(row, colTel).replace(/\D/g, '') || null : null
-    const agencia = colAgencia >= 0 ? extrairValor(row, colAgencia) || null : null
-    const conta = colConta >= 0 ? extrairValor(row, colConta) || null : null
 
-    // Data: obrigatória
+    // ★ FIX: padStart garante 11 dígitos (Excel come zero à esquerda)
+    const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '').padStart(11, '0')
+
+    const telefone =
+      colTel >= 0
+        ? extrairValor(row, colTel).replace(/\D/g, '') || null
+        : null
+    const agencia =
+      colAgencia >= 0 ? extrairValor(row, colAgencia) || null : null
+    const conta =
+      colConta >= 0 ? extrairValor(row, colConta) || null : null
+
+    // Data
     let dataCadastro: string | null = null
     if (colData >= 0) {
       dataCadastro = normalizarData(row[colData])
     }
 
-    // Validações
-    if (!nome) continue // linha vazia
+    // ── Validações ──
 
+    // Linha vazia
+    if (!nome) continue
+
+    // CPF tamanho
     if (!cpfRaw || cpfRaw.length !== 11) {
       resultado.push({
         nome,
@@ -254,10 +257,11 @@ export async function parsarArquivoClientes(
       continue
     }
 
+    // CPF dígitos verificadores
     if (!validarCPF(cpfRaw)) {
       resultado.push({
         nome,
-        cpf: cpfRaw,
+        cpf: maskCPF(cpfRaw),
         telefone,
         agencia,
         conta,
@@ -267,6 +271,7 @@ export async function parsarArquivoClientes(
       continue
     }
 
+    // Data obrigatória
     if (!dataCadastro) {
       resultado.push({
         nome,
@@ -275,7 +280,7 @@ export async function parsarArquivoClientes(
         agencia,
         conta,
         data_cadastro: null,
-        erro: 'Data obrigatória (coluna "Data" vazia ou não encontrada)',
+        erro: 'Data obrigatória (coluna "Data" vazia ou formato não reconhecido)',
       })
       continue
     }
