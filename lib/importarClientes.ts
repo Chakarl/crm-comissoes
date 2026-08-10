@@ -1,5 +1,3 @@
-// src/lib/importarClientes.ts
-
 import * as XLSX from 'xlsx'
 
 // ── Interfaces ──
@@ -10,6 +8,7 @@ export interface ClienteImportado {
   agencia: string | null
   conta: string | null
   data_cadastro: string | null
+  valido: boolean          // ★ ADICIONADO — o frontend depende disso
   erro?: string
 }
 
@@ -132,12 +131,11 @@ export async function parsarArquivoClientes(
     const text = await file.text()
     rawData = parseXML(text)
   } else {
-    // Excel ou CSV — lê TODAS as abas
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, {
       type: 'array',
       cellDates: false,
-      raw: true,          // preserva valores brutos
+      raw: true,
       cellText: false,
     })
 
@@ -205,6 +203,7 @@ export async function parsarArquivoClientes(
         agencia: null,
         conta: null,
         data_cadastro: null,
+        valido: false,
         erro: 'Colunas obrigatórias não encontradas. Precisa de: Nome, CPF.',
       },
     ]
@@ -220,9 +219,8 @@ export async function parsarArquivoClientes(
 
     const nome = extrairValor(row, colNome)
 
-    // ★ FIX: padStart garante 11 dígitos (Excel come zero à esquerda)
+    // ★ padStart garante 11 dígitos (Excel come zero à esquerda)
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '').padStart(11, '0')
-console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(row, colCPF)}" | Limpo: "${cpfRaw}" | Válido: ${validarCPF(cpfRaw)}`)
 
     const telefone =
       colTel >= 0
@@ -253,6 +251,7 @@ console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(r
         agencia,
         conta,
         data_cadastro: dataCadastro,
+        valido: false,
         erro: 'CPF inválido (precisa ter 11 dígitos)',
       })
       continue
@@ -267,6 +266,7 @@ console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(r
         agencia,
         conta,
         data_cadastro: dataCadastro,
+        valido: false,
         erro: 'CPF inválido (dígitos verificadores não conferem)',
       })
       continue
@@ -281,6 +281,7 @@ console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(r
         agencia,
         conta,
         data_cadastro: null,
+        valido: false,
         erro: 'Data obrigatória (coluna "Data" vazia ou formato não reconhecido)',
       })
       continue
@@ -295,6 +296,7 @@ console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(r
         agencia,
         conta,
         data_cadastro: dataCadastro,
+        valido: false,
         erro: 'CPF duplicado na planilha',
       })
       continue
@@ -302,6 +304,7 @@ console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(r
 
     cpfsVistos.add(cpfRaw)
 
+    // ★ VÁLIDO
     resultado.push({
       nome,
       cpf: maskCPF(cpfRaw),
@@ -309,6 +312,7 @@ console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(r
       agencia,
       conta,
       data_cadastro: dataCadastro,
+      valido: true,
     })
   }
 
