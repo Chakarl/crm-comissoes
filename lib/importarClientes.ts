@@ -1,3 +1,5 @@
+// src/lib/importarClientes.ts
+
 import * as XLSX from 'xlsx'
 
 // ── Interfaces ──
@@ -8,7 +10,7 @@ export interface ClienteImportado {
   agencia: string | null
   conta: string | null
   data_cadastro: string | null
-  valido: boolean          // ★ ADICIONADO — o frontend depende disso
+  valido: boolean
   erro?: string
 }
 
@@ -47,7 +49,6 @@ function maskCPF(v: string): string {
 function normalizarData(valor: any): string | null {
   if (valor == null || valor === '') return null
 
-  // Se for número (serial do Excel)
   if (typeof valor === 'number') {
     const dataBase = new Date(1899, 11, 30)
     const data = new Date(dataBase.getTime() + valor * 86400000)
@@ -59,7 +60,6 @@ function normalizarData(valor: any): string | null {
 
   const str = String(valor).trim()
 
-  // dd/mm/yyyy ou dd-mm-yyyy
   const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
   if (brMatch) {
     const [, d, m, y] = brMatch
@@ -69,7 +69,6 @@ function normalizarData(valor: any): string | null {
     }
   }
 
-  // yyyy-mm-dd
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (isoMatch) {
     const data = new Date(str)
@@ -81,15 +80,23 @@ function normalizarData(valor: any): string | null {
   return null
 }
 
-// ── Encontrar coluna pelo header ──
+// ── Encontrar coluna pelo header (MATCH EXATO PRIMEIRO) ──
 function encontrarColuna(headers: string[], possibilidades: string[]): number {
-  const idx = headers.findIndex((h) => {
+  // 1ª passada: match EXATO
+  const idxExato = headers.findIndex((h) => {
+    const header = h.toLowerCase().trim()
+    return possibilidades.some((p) => header === p)
+  })
+  if (idxExato >= 0) return idxExato
+
+  // 2ª passada: match por prefixo (fallback)
+  const idxPrefixo = headers.findIndex((h) => {
     const header = h.toLowerCase().trim()
     return possibilidades.some(
-      (p) => header === p || header.startsWith(p + ':') || header.startsWith(p + ' ')
+      (p) => header.startsWith(p + ':') || header.startsWith(p + ' ')
     )
   })
-  return idx
+  return idxPrefixo
 }
 
 // ── Extrair valor de célula ──
@@ -176,8 +183,16 @@ export async function parsarArquivoClientes(
   // ── Mapear headers ──
   const headers = rawData[0].map((h: any) => String(h || '').toLowerCase().trim())
 
+  const colData = encontrarColuna(headers, [
+    'data',
+    'date',
+    'data_cadastro',
+    'data cadastro',
+  ])
   const colNome = encontrarColuna(headers, ['nome', 'name', 'cliente'])
   const colCPF = encontrarColuna(headers, ['cpf', 'cpf/cnpj', 'documento'])
+  const colAgencia = encontrarColuna(headers, ['agencia', 'agência', 'ag'])
+  const colConta = encontrarColuna(headers, ['conta', 'account', 'cc'])
   const colTel = encontrarColuna(headers, [
     'telefone',
     'tel',
@@ -185,14 +200,17 @@ export async function parsarArquivoClientes(
     'fone',
     'phone',
   ])
-  const colAgencia = encontrarColuna(headers, ['agencia', 'agência', 'ag'])
-  const colConta = encontrarColuna(headers, ['conta', 'account', 'cc'])
-  const colData = encontrarColuna(headers, [
-    'data',
-    'date',
-    'data_cadastro',
-    'data cadastro',
-  ])
+
+  // ★ DEBUG — remova depois de confirmar que está correto
+  console.log('[IMPORT] Headers encontrados:', headers)
+  console.log('[IMPORT] Índices mapeados:', {
+    data: colData,
+    nome: colNome,
+    cpf: colCPF,
+    agencia: colAgencia,
+    conta: colConta,
+    telefone: colTel,
+  })
 
   if (colNome < 0 || colCPF < 0) {
     return [
@@ -231,13 +249,10 @@ export async function parsarArquivoClientes(
     const conta =
       colConta >= 0 ? extrairValor(row, colConta) || null : null
 
-    // Data
     let dataCadastro: string | null = null
     if (colData >= 0) {
       dataCadastro = normalizarData(row[colData])
     }
-
-    // ── Validações ──
 
     // Linha vazia
     if (!nome) continue
