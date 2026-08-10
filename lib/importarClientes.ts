@@ -1,6 +1,8 @@
-import * as XLSX from 'xlsx'
-import { formatarNomeProprio } from '@/lib/formatarNome'
+// src/lib/importarClientes.ts
 
+import * as XLSX from 'xlsx'
+
+// ── Interfaces ──
 export interface ClienteImportado {
   nome: string
   cpf: string
@@ -8,11 +10,10 @@ export interface ClienteImportado {
   agencia: string | null
   conta: string | null
   data_cadastro: string | null
-  valido: boolean
-  erro: string | null
+  erro?: string
 }
 
-// ── Validação real de CPF ──
+// ── Validação de CPF ──
 function validarCPF(cpf: string): boolean {
   const nums = cpf.replace(/\D/g, '')
   if (nums.length !== 11) return false
@@ -33,6 +34,7 @@ function validarCPF(cpf: string): boolean {
   return true
 }
 
+// ── Máscara de CPF ──
 function maskCPF(v: string): string {
   return v
     .replace(/\D/g, '')
@@ -42,80 +44,95 @@ function maskCPF(v: string): string {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
+// ── Normalizar data ──
 function normalizarData(valor: any): string | null {
-  if (!valor) return null
+  if (valor == null || valor === '') return null
 
-  // Serial date do Excel
+  // Se for número (serial do Excel)
   if (typeof valor === 'number') {
-    const data = XLSX.SSF.parse_date_code(valor)
-    if (data) {
-      const y = data.y
-      const m = String(data.m).padStart(2, '0')
-      const d = String(data.d).padStart(2, '0')
-      return `${y}-${m}-${d}`
+    const dataBase = new Date(1899, 11, 30)
+    const data = new Date(dataBase.getTime() + valor * 86400000)
+    if (!isNaN(data.getTime())) {
+      return data.toISOString().split('T')[0]
     }
     return null
   }
 
   const str = String(valor).trim()
 
-  // dd/mm/yyyy
-  const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  // dd/mm/yyyy ou dd-mm-yyyy
+  const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
   if (brMatch) {
-    return `${brMatch[3]}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`
+    const [, d, m, y] = brMatch
+    const data = new Date(Number(y), Number(m) - 1, Number(d))
+    if (!isNaN(data.getTime())) {
+      return data.toISOString().split('T')[0]
+    }
   }
 
   // yyyy-mm-dd
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+  if (isoMatch) {
+    const data = new Date(str)
+    if (!isNaN(data.getTime())) {
+      return data.toISOString().split('T')[0]
+    }
+  }
+
+  // mm/dd/yyyy fallback
+  const usMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+  if (usMatch) {
+    const [, m, d, y] = usMatch
+    if (Number(m) <= 12 && Number(d) <= 31) {
+      const data = new Date(Number(y), Number(m) - 1, Number(d))
+      if (!isNaN(data.getTime())) {
+        return data.toISOString().split('T')[0]
+      }
+    }
+  }
 
   return null
 }
 
-// ── Mapeia headers flexíveis ──
-function encontrarColuna(headers: string[], opcoes: string[]): number {
-  const headersNorm = headers.map((h) => (h || '').toString().toLowerCase().trim())
-  for (const op of opcoes) {
-    const idx = headersNorm.findIndex((h) => h.includes(op))
-    if (idx !== -1) return idx
-  }
-  return -1
+// ── Encontrar coluna pelo header ──
+function encontrarColuna(headers: string[], possibilidades: string[]): number {
+  const idx = headers.findIndex((h) =>
+    possibilidades.includes(h.toLowerCase().trim())
+  )
+  return idx
 }
 
-function extrairValor(row: any[], idx: number): string {
-  if (idx === -1 || !row[idx]) return ''
-  return String(row[idx]).trim()
+// ── Extrair valor de célula ──
+function extrairValor(row: any[], index: number): string {
+  if (index < 0 || index >= row.length) return ''
+  const val = row[index]
+  if (val == null) return ''
+  return String(val).trim()
 }
 
-// ── Parse XML ──
-function parseXML(text: string): any[][] {
+// ── Parser XML ──
+function parseXML(xmlString: string): any[][] {
   const parser = new DOMParser()
-  const doc = parser.parseFromString(text, 'text/xml')
+  const doc = parser.parseFromString(xmlString, 'text/xml')
 
-  const tagNames = ['Row', 'row', 'registro', 'cliente', 'Cliente', 'record']
-  let rows: Element[] = []
+  const rows = doc.querySelectorAll('Row')
+  const result: any[][] = []
 
-  for (const tag of tagNames) {
-    rows = Array.from(doc.getElementsByTagName(tag))
-    if (rows.length > 0) break
-  }
-
-  if (rows.length === 0) return []
-
-  const firstRow = rows[0]
-  const headers = Array.from(firstRow.children).map((el) => el.tagName)
-
-  const data: any[][] = [headers]
   rows.forEach((row) => {
-    const vals = Array.from(row.children).map((el) => el.textContent || '')
-    data.push(vals)
+    const cells: any[] = []
+    row.querySelectorAll('Cell Data, Cell ss\\:Data').forEach((cell) => {
+      cells.push(cell.textContent || '')
+    })
+    if (cells.length > 0) result.push(cells)
   })
 
-  return data
+  return result
 }
 
 // ── Função principal ──
-export async function parsarArquivoClientes(file: File): Promise<ClienteImportado[]> {
+export async function parsarArquivoClientes(
+  file: File
+): Promise<ClienteImportado[]> {
   let rawData: any[][]
 
   const ext = file.name.split('.').pop()?.toLowerCase()
@@ -124,86 +141,168 @@ export async function parsarArquivoClientes(file: File): Promise<ClienteImportad
     const text = await file.text()
     rawData = parseXML(text)
   } else {
+    // Excel ou CSV — lê TODAS as abas
     const buffer = await file.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: false })
-    const sheetName = workbook.SheetNames[0]
-    const sheet = workbook.Sheets[sheetName]
-    rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true })
+
+    rawData = []
+    let headerGlobal: any[] | null = null
+
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName]
+      const sheetData: any[][] = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        raw: true,
+      })
+
+      if (sheetData.length === 0) continue
+
+      if (!headerGlobal) {
+        // Primeira aba: pega header + dados
+        headerGlobal = sheetData[0]
+        rawData = [...sheetData]
+      } else {
+        // Demais abas: detecta se a primeira linha é header ou dado
+        const primeiraLinha = sheetData[0]
+        const pareceHeader = primeiraLinha.every(
+          (cell: any) =>
+            typeof cell === 'string' &&
+            isNaN(Number(cell.replace(/\D/g, '').slice(0, 1)))
+        )
+
+        if (pareceHeader) {
+          // Pula o header, pega só os dados
+          rawData.push(...sheetData.slice(1))
+        } else {
+          // Não tem header, pega tudo
+          rawData.push(...sheetData)
+        }
+      }
+    }
   }
 
   if (rawData.length < 2) return []
 
-  const headers = rawData[0].map((h: any) => String(h || ''))
+  // ── Mapear headers ──
+  const headers = rawData[0].map((h: any) => String(h || '').toLowerCase().trim())
 
   const colNome = encontrarColuna(headers, ['nome', 'name', 'cliente'])
   const colCPF = encontrarColuna(headers, ['cpf', 'cpf/cnpj', 'documento'])
-  const colTelefone = encontrarColuna(headers, ['telefone', 'tel', 'celular', 'fone', 'phone'])
+  const colTel = encontrarColuna(headers, [
+    'telefone',
+    'tel',
+    'celular',
+    'fone',
+    'phone',
+  ])
   const colAgencia = encontrarColuna(headers, ['agencia', 'agência', 'ag'])
   const colConta = encontrarColuna(headers, ['conta', 'account', 'cc'])
-  const colData = encontrarColuna(headers, ['data', 'date', 'data_cadastro', 'data cadastro'])
+  const colData = encontrarColuna(headers, [
+    'data',
+    'date',
+    'data_cadastro',
+    'data cadastro',
+  ])
 
-  if (colNome === -1 || colCPF === -1) {
-    return [{
-      nome: '',
-      cpf: '',
-      telefone: null,
-      agencia: null,
-      conta: null,
-      data_cadastro: null,
-      valido: false,
-      erro: 'Planilha precisa ter ao menos colunas "Nome" e "CPF".',
-    }]
+  if (colNome < 0 || colCPF < 0) {
+    return [
+      {
+        nome: '',
+        cpf: '',
+        telefone: null,
+        agencia: null,
+        conta: null,
+        data_cadastro: null,
+        erro: 'Colunas obrigatórias não encontradas. Precisa de: Nome, CPF.',
+      },
+    ]
   }
 
-  const cpfsVistos = new Set<string>()
+  // ── Processar linhas ──
   const resultado: ClienteImportado[] = []
+  const cpfsVistos = new Set<string>()
 
   for (let i = 1; i < rawData.length; i++) {
     const row = rawData[i]
     if (!row || row.length === 0) continue
 
-    const nomeRaw = extrairValor(row, colNome)
+    const nome = extrairValor(row, colNome)
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '')
+    const telefone = colTel >= 0 ? extrairValor(row, colTel).replace(/\D/g, '') || null : null
+    const agencia = colAgencia >= 0 ? extrairValor(row, colAgencia) || null : null
+    const conta = colConta >= 0 ? extrairValor(row, colConta) || null : null
 
-    if (!nomeRaw && !cpfRaw) continue
-
-    const nome = formatarNomeProprio(nomeRaw)
-    const telefone = extrairValor(row, colTelefone).replace(/\D/g, '') || null
-    const agencia = extrairValor(row, colAgencia) || null
-    const conta = extrairValor(row, colConta) || null
-    const data_cadastro = normalizarData(colData !== -1 ? row[colData] : null)
-
-    let valido = true
-    let erro: string | null = null
-
-    if (!nomeRaw) {
-      valido = false
-      erro = 'Nome vazio'
-    } else if (cpfRaw.length !== 11) {
-      valido = false
-      erro = `CPF inválido (${cpfRaw.length} dígitos)`
-    } else if (!validarCPF(cpfRaw)) {
-      valido = false
-      erro = 'CPF inválido (dígito verificador)'
-    } else if (cpfsVistos.has(cpfRaw)) {
-      valido = false
-      erro = 'CPF duplicado na planilha'
-    } else if (!data_cadastro) {
-      valido = false
-      erro = 'Data obrigatória (coluna "Data" vazia ou não encontrada)'
+    // Data: obrigatória
+    let dataCadastro: string | null = null
+    if (colData >= 0) {
+      dataCadastro = normalizarData(row[colData])
     }
 
-    if (valido) cpfsVistos.add(cpfRaw)
+    // Validações
+    if (!nome) continue // linha vazia
+
+    if (!cpfRaw || cpfRaw.length !== 11) {
+      resultado.push({
+        nome,
+        cpf: cpfRaw,
+        telefone,
+        agencia,
+        conta,
+        data_cadastro: dataCadastro,
+        erro: 'CPF inválido (precisa ter 11 dígitos)',
+      })
+      continue
+    }
+
+    if (!validarCPF(cpfRaw)) {
+      resultado.push({
+        nome,
+        cpf: cpfRaw,
+        telefone,
+        agencia,
+        conta,
+        data_cadastro: dataCadastro,
+        erro: 'CPF inválido (dígitos verificadores não conferem)',
+      })
+      continue
+    }
+
+    if (!dataCadastro) {
+      resultado.push({
+        nome,
+        cpf: maskCPF(cpfRaw),
+        telefone,
+        agencia,
+        conta,
+        data_cadastro: null,
+        erro: 'Data obrigatória (coluna "Data" vazia ou não encontrada)',
+      })
+      continue
+    }
+
+    // Duplicata interna
+    if (cpfsVistos.has(cpfRaw)) {
+      resultado.push({
+        nome,
+        cpf: maskCPF(cpfRaw),
+        telefone,
+        agencia,
+        conta,
+        data_cadastro: dataCadastro,
+        erro: 'CPF duplicado na planilha',
+      })
+      continue
+    }
+
+    cpfsVistos.add(cpfRaw)
 
     resultado.push({
       nome,
-      cpf: cpfRaw.length === 11 ? maskCPF(cpfRaw) : cpfRaw,
+      cpf: maskCPF(cpfRaw),
       telefone,
       agencia,
       conta,
-      data_cadastro,
-      valido,
-      erro,
+      data_cadastro: dataCadastro,
     })
   }
 
