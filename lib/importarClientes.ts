@@ -2,7 +2,6 @@
 
 import * as XLSX from 'xlsx'
 
-// ── Interfaces ──
 export interface ClienteImportado {
   nome: string
   cpf: string
@@ -35,7 +34,6 @@ function validarCPF(cpf: string): boolean {
   return true
 }
 
-// ── Máscara de CPF ──
 function maskCPF(v: string): string {
   return v
     .replace(/\D/g, '')
@@ -45,6 +43,21 @@ function maskCPF(v: string): string {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
+// ── Formatar nome próprio (DENTRO do parser) ──
+function formatarNome(nome: string): string {
+  const preposicoes = new Set(['de', 'da', 'do', 'das', 'dos', 'e'])
+  return nome
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p, i) =>
+      i > 0 && preposicoes.has(p)
+        ? p
+        : p.charAt(0).toUpperCase() + p.slice(1)
+    )
+    .join(' ')
+}
+
 // ── Normalizar data ──
 function normalizarData(valor: any): string | null {
   if (valor == null || valor === '') return null
@@ -52,9 +65,7 @@ function normalizarData(valor: any): string | null {
   if (typeof valor === 'number') {
     const dataBase = new Date(1899, 11, 30)
     const data = new Date(dataBase.getTime() + valor * 86400000)
-    if (!isNaN(data.getTime())) {
-      return data.toISOString().split('T')[0]
-    }
+    if (!isNaN(data.getTime())) return data.toISOString().split('T')[0]
     return null
   }
 
@@ -64,42 +75,33 @@ function normalizarData(valor: any): string | null {
   if (brMatch) {
     const [, d, m, y] = brMatch
     const data = new Date(Number(y), Number(m) - 1, Number(d))
-    if (!isNaN(data.getTime())) {
-      return data.toISOString().split('T')[0]
-    }
+    if (!isNaN(data.getTime())) return data.toISOString().split('T')[0]
   }
 
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (isoMatch) {
     const data = new Date(str)
-    if (!isNaN(data.getTime())) {
-      return data.toISOString().split('T')[0]
-    }
+    if (!isNaN(data.getTime())) return data.toISOString().split('T')[0]
   }
 
   return null
 }
 
-// ── Encontrar coluna pelo header (MATCH EXATO PRIMEIRO) ──
+// ── Encontrar coluna (MATCH EXATO, sem ambiguidade) ──
 function encontrarColuna(headers: string[], possibilidades: string[]): number {
-  // 1ª passada: match EXATO
-  const idxExato = headers.findIndex((h) => {
-    const header = h.toLowerCase().trim()
-    return possibilidades.some((p) => header === p)
-  })
-  if (idxExato >= 0) return idxExato
-
-  // 2ª passada: match por prefixo (fallback)
-  const idxPrefixo = headers.findIndex((h) => {
-    const header = h.toLowerCase().trim()
-    return possibilidades.some(
-      (p) => header.startsWith(p + ':') || header.startsWith(p + ' ')
-    )
-  })
-  return idxPrefixo
+  // Passa 1: match exato
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i]
+    if (possibilidades.includes(h)) return i
+  }
+  // Passa 2: startsWith (fallback)
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i]
+    if (possibilidades.some((p) => h.startsWith(p))) return i
+  }
+  return -1
 }
 
-// ── Extrair valor de célula ──
 function extrairValor(row: any[], index: number): string {
   if (index < 0 || index >= row.length) return ''
   const val = row[index]
@@ -111,10 +113,8 @@ function extrairValor(row: any[], index: number): string {
 function parseXML(xmlString: string): any[][] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(xmlString, 'text/xml')
-
   const rows = doc.querySelectorAll('Row')
   const result: any[][] = []
-
   rows.forEach((row) => {
     const cells: any[] = []
     row.querySelectorAll('Cell Data, Cell ss\\:Data').forEach((cell) => {
@@ -122,7 +122,6 @@ function parseXML(xmlString: string): any[][] {
     })
     if (cells.length > 0) result.push(cells)
   })
-
   return result
 }
 
@@ -131,7 +130,6 @@ export async function parsarArquivoClientes(
   file: File
 ): Promise<ClienteImportado[]> {
   let rawData: any[][]
-
   const ext = file.name.split('.').pop()?.toLowerCase()
 
   if (ext === 'xml') {
@@ -155,7 +153,6 @@ export async function parsarArquivoClientes(
         header: 1,
         raw: true,
       })
-
       if (sheetData.length === 0) continue
 
       if (!headerGlobal) {
@@ -168,7 +165,6 @@ export async function parsarArquivoClientes(
             typeof cell === 'string' &&
             isNaN(Number(cell.replace(/\D/g, '').slice(0, 1)))
         )
-
         if (pareceHeader) {
           rawData.push(...sheetData.slice(1))
         } else {
@@ -180,37 +176,26 @@ export async function parsarArquivoClientes(
 
   if (rawData.length < 2) return []
 
-  // ── Mapear headers ──
-  const headers = rawData[0].map((h: any) => String(h || '').toLowerCase().trim())
+  // ── Mapear headers (tudo minúsculo + trim + remove acentos) ──
+  const headers = rawData[0].map((h: any) =>
+    String(h || '')
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+  )
 
-  const colData = encontrarColuna(headers, [
-    'data',
-    'date',
-    'data_cadastro',
-    'data cadastro',
-  ])
+  console.log('[IMPORT] Headers:', headers)
+
+  // ★ Ordem importa: telefone DEPOIS de conta, sem conflito
+  const colData = encontrarColuna(headers, ['data', 'date', 'data_cadastro', 'data cadastro'])
   const colNome = encontrarColuna(headers, ['nome', 'name', 'cliente'])
   const colCPF = encontrarColuna(headers, ['cpf', 'cpf/cnpj', 'documento'])
-  const colAgencia = encontrarColuna(headers, ['agencia', 'agência', 'ag'])
+  const colAgencia = encontrarColuna(headers, ['agencia', 'ag'])
   const colConta = encontrarColuna(headers, ['conta', 'account', 'cc'])
-  const colTel = encontrarColuna(headers, [
-    'telefone',
-    'tel',
-    'celular',
-    'fone',
-    'phone',
-  ])
+  const colTel = encontrarColuna(headers, ['telefone', 'celular', 'fone', 'phone', 'tel'])
 
-  // ★ DEBUG — remova depois de confirmar que está correto
-  console.log('[IMPORT] Headers encontrados:', headers)
-  console.log('[IMPORT] Índices mapeados:', {
-    data: colData,
-    nome: colNome,
-    cpf: colCPF,
-    agencia: colAgencia,
-    conta: colConta,
-    telefone: colTel,
-  })
+  console.log('[IMPORT] Índices:', { colData, colNome, colCPF, colAgencia, colConta, colTel })
 
   if (colNome < 0 || colCPF < 0) {
     return [
@@ -227,7 +212,6 @@ export async function parsarArquivoClientes(
     ]
   }
 
-  // ── Processar linhas ──
   const resultado: ClienteImportado[] = []
   const cpfsVistos = new Set<string>()
 
@@ -235,38 +219,28 @@ export async function parsarArquivoClientes(
     const row = rawData[i]
     if (!row || row.length === 0) continue
 
-    const nome = extrairValor(row, colNome)
+    // ★ FORMATA O NOME AQUI
+    const nomeRaw = extrairValor(row, colNome)
+    if (!nomeRaw) continue
+    const nome = formatarNome(nomeRaw)
 
-    // ★ padStart garante 11 dígitos (Excel come zero à esquerda)
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '').padStart(11, '0')
 
     const telefone =
-      colTel >= 0
-        ? extrairValor(row, colTel).replace(/\D/g, '') || null
-        : null
+      colTel >= 0 ? extrairValor(row, colTel).replace(/\D/g, '') || null : null
     const agencia =
       colAgencia >= 0 ? extrairValor(row, colAgencia) || null : null
     const conta =
       colConta >= 0 ? extrairValor(row, colConta) || null : null
 
     let dataCadastro: string | null = null
-    if (colData >= 0) {
-      dataCadastro = normalizarData(row[colData])
-    }
-
-    // Linha vazia
-    if (!nome) continue
+    if (colData >= 0) dataCadastro = normalizarData(row[colData])
 
     // CPF tamanho
     if (!cpfRaw || cpfRaw.length !== 11) {
       resultado.push({
-        nome,
-        cpf: cpfRaw,
-        telefone,
-        agencia,
-        conta,
-        data_cadastro: dataCadastro,
-        valido: false,
+        nome, cpf: cpfRaw, telefone, agencia, conta,
+        data_cadastro: dataCadastro, valido: false,
         erro: 'CPF inválido (precisa ter 11 dígitos)',
       })
       continue
@@ -275,13 +249,8 @@ export async function parsarArquivoClientes(
     // CPF dígitos verificadores
     if (!validarCPF(cpfRaw)) {
       resultado.push({
-        nome,
-        cpf: maskCPF(cpfRaw),
-        telefone,
-        agencia,
-        conta,
-        data_cadastro: dataCadastro,
-        valido: false,
+        nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
+        data_cadastro: dataCadastro, valido: false,
         erro: 'CPF inválido (dígitos verificadores não conferem)',
       })
       continue
@@ -290,13 +259,8 @@ export async function parsarArquivoClientes(
     // Data obrigatória
     if (!dataCadastro) {
       resultado.push({
-        nome,
-        cpf: maskCPF(cpfRaw),
-        telefone,
-        agencia,
-        conta,
-        data_cadastro: null,
-        valido: false,
+        nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
+        data_cadastro: null, valido: false,
         erro: 'Data obrigatória (coluna "Data" vazia ou formato não reconhecido)',
       })
       continue
@@ -305,13 +269,8 @@ export async function parsarArquivoClientes(
     // Duplicata interna
     if (cpfsVistos.has(cpfRaw)) {
       resultado.push({
-        nome,
-        cpf: maskCPF(cpfRaw),
-        telefone,
-        agencia,
-        conta,
-        data_cadastro: dataCadastro,
-        valido: false,
+        nome, cpf: maskCPF(cpfRaw), telefone, agencia, conta,
+        data_cadastro: dataCadastro, valido: false,
         erro: 'CPF duplicado na planilha',
       })
       continue
@@ -319,7 +278,6 @@ export async function parsarArquivoClientes(
 
     cpfsVistos.add(cpfRaw)
 
-    // ★ VÁLIDO
     resultado.push({
       nome,
       cpf: maskCPF(cpfRaw),
