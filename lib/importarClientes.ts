@@ -222,6 +222,7 @@ export async function parsarArquivoClientes(
 
     // ★ FIX: padStart garante 11 dígitos (Excel come zero à esquerda)
     const cpfRaw = extrairValor(row, colCPF).replace(/\D/g, '').padStart(11, '0')
+console.log(`[DEBUG] Linha ${i} | Nome: "${nome}" | CPF bruto: "${extrairValor(row, colCPF)}" | Limpo: "${cpfRaw}" | Válido: ${validarCPF(cpfRaw)}`)
 
     const telefone =
       colTel >= 0
