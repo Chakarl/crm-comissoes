@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  CalendarDays,
 } from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
@@ -86,6 +87,10 @@ export default function ClientesPage() {
     { id: string; nome: string }[]
   >([])
 
+  // ── Estados de filtro por intervalo de datas ──
+  const [dataInicio, setDataInicio] = useState<string>('')
+  const [dataFim, setDataFim] = useState<string>('')
+
   // ── Estados de importação ──
   const [showImportModal, setShowImportModal] = useState(false)
   const [importStep, setImportStep] = useState<'upload' | 'preview' | 'resultado'>('upload')
@@ -112,7 +117,7 @@ export default function ClientesPage() {
 
   useEffect(() => {
     setPagina(1)
-  }, [search, mesFiltro])
+  }, [search, mesFiltro, dataInicio, dataFim])
 
   const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
@@ -434,10 +439,15 @@ export default function ClientesPage() {
   const filtered = clientes.filter((c) => {
     const dataRef = c.data_cadastro || c.ultimaProposta || ''
     const matchMes = !mesFiltro || dataRef.startsWith(mesFiltro)
+
+    // ── Filtro por intervalo de datas ──
+    const matchInicio = !dataInicio || dataRef >= dataInicio
+    const matchFim = !dataFim || dataRef <= dataFim
+
     const matchSearch =
       c.nome?.toLowerCase().includes(search.toLowerCase()) ||
       c.cpf?.toLowerCase().includes(search.toLowerCase())
-    return matchMes && matchSearch
+    return matchMes && matchInicio && matchFim && matchSearch
   })
 
   const totalPaginas = Math.ceil(filtered.length / POR_PAGINA)
@@ -445,7 +455,7 @@ export default function ClientesPage() {
   const fatia = filtered.slice((pag - 1) * POR_PAGINA, pag * POR_PAGINA)
 
   const validosCount = importDados.filter((d) => d.valido).length
-  const invalidosCount = importDados.filter((d) => !d.valido).length
+  const invalidosCountPreview = importDados.filter((d) => !d.valido).length
 
   if (loadingUser || loading) {
     return (
@@ -534,6 +544,43 @@ export default function ClientesPage() {
           onSelecionar={setMesFiltro}
           datasDisponiveis={datasDisponiveis}
         />
+
+        {/* ── Filtro por Intervalo de Datas ── */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
+              <CalendarDays className="w-4 h-4 text-blue-500" />
+              <span className="font-medium">Período:</span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+              />
+              <span className="text-sm text-slate-400 hidden sm:inline">até</span>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+              />
+              {(dataInicio || dataFim) && (
+                <button
+                  onClick={() => {
+                    setDataInicio('')
+                    setDataFim('')
+                  }}
+                  className="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Limpar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Desktop Table */}
         <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -882,11 +929,11 @@ export default function ClientesPage() {
                         {validosCount} válido{validosCount !== 1 && 's'}
                       </span>
                     </div>
-                    {invalidosCount > 0 && (
+                    {invalidosCountPreview > 0 && (
                       <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm">
                         <XCircle className="w-4 h-4 text-red-600" />
                         <span className="font-medium text-red-700">
-                          {invalidosCount} com erro{invalidosCount !== 1 && 's'}
+                          {invalidosCountPreview} com erro{invalidosCountPreview !== 1 && 's'}
                         </span>
                       </div>
                     )}

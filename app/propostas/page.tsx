@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
 import Link from 'next/link'
-import { Plus, Search, FileText, Pencil, Trash2, Users } from 'lucide-react'
+import { Plus, Search, FileText, Pencil, Trash2, Users, CalendarDays, X } from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
 
@@ -35,6 +35,10 @@ export default function PropostasPage() {
   const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
   const [listaPromotores, setListaPromotores] = useState<{ id: string; nome: string }[]>([])
 
+  // ── Filtro por intervalo de datas ──
+  const [dataInicio, setDataInicio] = useState<string>('')
+  const [dataFim, setDataFim] = useState<string>('')
+
   useEffect(() => {
     if (usuario) {
       if (usuario.is_master) carregarPromotores()
@@ -49,7 +53,7 @@ export default function PropostasPage() {
 
   useEffect(() => {
     setPagina(1)
-  }, [search, mesFiltro])
+  }, [search, mesFiltro, dataInicio, dataFim])
 
   const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
@@ -109,10 +113,23 @@ export default function PropostasPage() {
 
   const filtered = propostas.filter((p) => {
     const matchMes = !mesFiltro || p.data_proposta?.startsWith(mesFiltro)
+
+    // ── Filtro por intervalo de datas ──
+    let matchIntervalo = true
+    if (dataInicio && p.data_proposta) {
+      matchIntervalo = p.data_proposta >= dataInicio
+    }
+    if (dataFim && p.data_proposta && matchIntervalo) {
+      matchIntervalo = p.data_proposta <= dataFim
+    }
+    if ((dataInicio || dataFim) && !p.data_proposta) {
+      matchIntervalo = false
+    }
+
     const matchSearch =
       p.numero_proposta?.toLowerCase().includes(search.toLowerCase()) ||
       p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
-    return matchMes && matchSearch
+    return matchMes && matchIntervalo && matchSearch
   })
 
   const totalPaginas = Math.ceil(filtered.length / POR_PAGINA)
@@ -195,6 +212,43 @@ export default function PropostasPage() {
           onSelecionar={setMesFiltro}
           datasDisponiveis={propostas.map((p) => p.data_proposta)}
         />
+
+        {/* ── Filtro por Intervalo de Datas ── */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <CalendarDays className="w-4 h-4 text-blue-500" />
+              <span className="font-medium">Período:</span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+              />
+              <span className="text-sm text-slate-400 hidden sm:inline">até</span>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+              />
+              {(dataInicio || dataFim) && (
+                <button
+                  onClick={() => {
+                    setDataInicio('')
+                    setDataFim('')
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Limpar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Desktop Table */}
         <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">

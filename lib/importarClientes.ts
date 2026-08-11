@@ -1,5 +1,3 @@
-// src/lib/importarClientes.ts
-
 import * as XLSX from 'xlsx'
 
 export interface ClienteImportado {
