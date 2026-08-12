@@ -67,6 +67,19 @@ function maskTelefone(v: string) {
     .replace(/(\d{5})(\d{1,4})$/, '$1-$2')
 }
 
+// ── Formatar telefone para exibição (00) 00000-0000 ──
+function formatarTelefoneExibicao(tel: string | null): string {
+  if (!tel) return '—'
+  const digitos = tel.replace(/\D/g, '')
+  if (digitos.length === 11) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`
+  }
+  if (digitos.length === 10) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`
+  }
+  return tel
+}
+
 export default function ClientesPage() {
   const { usuario, loading: loadingUser } = useUsuario()
   const [clientes, setClientes] = useState<ClienteComData[]>([])
@@ -618,7 +631,7 @@ export default function ClientesPage() {
                   )}
                   <td className="px-6 py-4 text-slate-700">{c.agencia || '—'}</td>
                   <td className="px-6 py-4 text-slate-700">{c.conta || '—'}</td>
-                  <td className="px-6 py-4 text-slate-700">{c.telefone || '—'}</td>
+                  <td className="px-6 py-4 text-slate-700">{formatarTelefoneExibicao(c.telefone)}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       <button
@@ -709,7 +722,7 @@ export default function ClientesPage() {
                 </div>
                 <div>
                   <span className="text-slate-500">Telefone</span>
-                  <p className="font-medium text-slate-900">{c.telefone || '—'}</p>
+                  <p className="font-medium text-slate-900">{formatarTelefoneExibicao(c.telefone)}</p>
                 </div>
                 <div>
                   <span className="text-slate-500">Agência</span>
