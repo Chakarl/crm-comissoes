@@ -209,13 +209,16 @@ export function useClientes() {
     let list = [...clientes]
 
     if (search) {
-      const s = search.toLowerCase()
-      list = list.filter(
-        (c) =>
-          c.nome.toLowerCase().includes(s) ||
-          (c.cpf && c.cpf.replace(/\D/g, '').includes(s.replace(/\D/g, '')))
-      )
-    }
+  const s = search.toLowerCase()
+  console.log('Buscando:', s)
+  console.log('Clientes:', list.map(c => c.nome))
+  list = list.filter(
+    (c) =>
+      c.nome.toLowerCase().includes(s) ||
+      (c.cpf && c.cpf.replace(/\D/g, '').includes(s.replace(/\D/g, '')))
+  )
+  console.log('Resultado:', list.length)
+}
 
     if (mesFiltro) {
       list = list.filter((c) => c.data_cadastro && c.data_cadastro.startsWith(mesFiltro))
