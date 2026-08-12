@@ -5,11 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Navbar from '@/components/Navbar'
 import './globals.css'
-import { useInatividade } from '@/hooks/useInatividade'
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // adicione esta linha no topo do componente
-  useInatividade()
 
 export default function RootLayout({
   children,
