@@ -111,46 +111,41 @@ export default function ClientesPage() {
           datasDisponiveis={ctx.datasDisponiveis}
         />
 
-        {/* Filtro por Convênio */}
+        {/* Filtro Convênio + Período (mesma linha) */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-8">
+            {/* Convênio */}
+            <div className="flex items-center gap-2">
               <UsersIcon className="w-4 h-4 text-emerald-500" />
-              <span className="font-medium">Convênio:</span>
+              <span className="text-sm font-medium text-slate-600">Convênio:</span>
+              <select
+                value={ctx.convenioFiltro}
+                onChange={(e) => ctx.setConvenioFiltro(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="todos">Todos</option>
+                {CONVENIOS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
-            <select
-              value={ctx.convenioFiltro}
-              onChange={(e) => ctx.setConvenioFiltro(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
-            >
-              <option value="todos">Todos</option>
-              {CONVENIOS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        {/* Filtro por Intervalo de Datas */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
+            {/* Período */}
+            <div className="flex items-center gap-2 flex-wrap">
               <CalendarDays className="w-4 h-4 text-blue-500" />
-              <span className="font-medium">Período:</span>
-            </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+              <span className="text-sm font-medium text-slate-600">Período:</span>
               <input
                 type="date"
                 value={ctx.dataInicio}
                 onChange={(e) => ctx.setDataInicio(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <span className="text-sm text-slate-400 hidden sm:inline">até</span>
+              <span className="text-sm text-slate-400">até</span>
               <input
                 type="date"
                 value={ctx.dataFim}
                 onChange={(e) => ctx.setDataFim(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               {(ctx.dataInicio || ctx.dataFim) && (
                 <button
