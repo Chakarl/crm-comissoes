@@ -48,7 +48,6 @@ export const emptyForm = {
 
 export type FormData = typeof emptyForm
 
-// ── Máscaras ──
 export function maskCPF(v: string) {
   return v
     .replace(/\D/g, '')
@@ -77,6 +76,8 @@ export function formatarTelefoneExibicao(tel: string | null): string {
   }
   return tel
 }
+
+export { POR_PAGINA }
 
 export function useClientes() {
   const { usuario, loading: loadingUser } = useUsuario()
@@ -462,17 +463,17 @@ export function useClientes() {
     usuario,
     loadingUser,
     loading,
-
-    // Lista e filtros
+    // Lista
     clientes,
     filtered,
     fatia,
     totalPaginas,
-    pagina,
-    setPagina,
     pag,
+    // Busca e filtros
     search,
     setSearch,
+    pagina,
+    setPagina,
     mesFiltro,
     setMesFiltro,
     datasDisponiveis,
@@ -486,8 +487,7 @@ export function useClientes() {
     setDataInicio,
     dataFim,
     setDataFim,
-
-    // CRUD
+    // Modal CRUD
     showModal,
     editando,
     deletando,
@@ -500,7 +500,6 @@ export function useClientes() {
     fecharModal,
     handleSubmit,
     handleDelete,
-
     // Import
     showImportModal,
     importStep,

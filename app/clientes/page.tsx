@@ -13,14 +13,18 @@ import {
 } from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
-import { useClientes, CONVENIOS, formatarTelefoneExibicao } from './_hooks/useClientes'
-import { ClienteModal } from './_components/ClienteModal'
-import { ImportModal } from './_components/ImportModal'
+import { ClienteModal } from '@/components/ClienteModal'
+import { ImportModal } from '@/components/ImportModal'
+import {
+  useClientes,
+  CONVENIOS,
+  formatarTelefoneExibicao,
+} from '@/hooks/useClientes'
 
 export default function ClientesPage() {
-  const ctx = useClientes()
+  const h = useClientes()
 
-  if (ctx.loadingUser || ctx.loading) {
+  if (h.loadingUser || h.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-slate-600">Carregando clientes...</div>
@@ -38,21 +42,21 @@ export default function ClientesPage() {
               Clientes
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              {ctx.filtered.length} cliente{ctx.filtered.length !== 1 && 's'}
-              {ctx.search && ` encontrado${ctx.filtered.length !== 1 ? 's' : ''}`}
+              {h.filtered.length} cliente{h.filtered.length !== 1 && 's'}
+              {h.search && ` encontrado${h.filtered.length !== 1 ? 's' : ''}`}
             </p>
           </div>
 
           <div className="flex gap-3 w-full sm:w-auto">
             <button
-              onClick={ctx.abrirImport}
+              onClick={h.abrirImport}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base flex-1 sm:flex-none justify-center"
             >
               <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
               Importar Planilha
             </button>
             <button
-              onClick={ctx.abrirNovo}
+              onClick={h.abrirNovo}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base flex-1 sm:flex-none justify-center"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -61,23 +65,23 @@ export default function ClientesPage() {
           </div>
         </div>
 
-        {/* Filtro por Promotor (master only) */}
-        {ctx.usuario?.is_master && (
+        {/* Filtro Promotor (master) */}
+        {h.usuario?.is_master && (
           <div className="flex items-center gap-3 mb-6">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <UsersIcon className="w-4 h-4 text-violet-500" />
               <span className="font-medium">Promotor:</span>
             </div>
             <select
-              value={ctx.promotorFiltro}
+              value={h.promotorFiltro}
               onChange={(e) => {
-                ctx.setPromotorFiltro(e.target.value)
-                ctx.setPagina(1)
+                h.setPromotorFiltro(e.target.value)
+                h.setPagina(1)
               }}
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="todos">Todos os Promotores</option>
-              {ctx.listaPromotores.map((c) => (
+              {h.listaPromotores.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
@@ -93,41 +97,40 @@ export default function ClientesPage() {
             <input
               type="text"
               placeholder="Buscar por nome ou CPF..."
-              value={ctx.search}
-              onChange={(e) => ctx.setSearch(e.target.value)}
+              value={h.search}
+              onChange={(e) => h.setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
             />
           </div>
         </div>
 
-        {/* Filtro por Mês */}
+        {/* Filtro Mês */}
         <FiltroMes
-          mesSelecionado={ctx.mesFiltro}
-          onSelecionar={ctx.setMesFiltro}
-          datasDisponiveis={ctx.datasDisponiveis}
+          mesSelecionado={h.mesFiltro}
+          onSelecionar={h.setMesFiltro}
+          datasDisponiveis={h.datasDisponiveis}
         />
 
-        {/* Filtro por Convênio */}
+        {/* Filtro Convênio */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
-              <UsersIcon className="w-4 h-4 text-emerald-500" />
-              <span className="font-medium">Convênio:</span>
-            </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-600">Convênio:</span>
             <select
-              value={ctx.convenioFiltro}
-              onChange={(e) => ctx.setConvenioFiltro(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+              value={h.convenioFiltro}
+              onChange={(e) => h.setConvenioFiltro(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="todos">Todos</option>
               {CONVENIOS.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Filtro por Intervalo de Datas */}
+        {/* Filtro Intervalo de Datas */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
@@ -137,22 +140,22 @@ export default function ClientesPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
               <input
                 type="date"
-                value={ctx.dataInicio}
-                onChange={(e) => ctx.setDataInicio(e.target.value)}
+                value={h.dataInicio}
+                onChange={(e) => h.setDataInicio(e.target.value)}
                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
               />
               <span className="text-sm text-slate-400 hidden sm:inline">até</span>
               <input
                 type="date"
-                value={ctx.dataFim}
-                onChange={(e) => ctx.setDataFim(e.target.value)}
+                value={h.dataFim}
+                onChange={(e) => h.setDataFim(e.target.value)}
                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
               />
-              {(ctx.dataInicio || ctx.dataFim) && (
+              {(h.dataInicio || h.dataFim) && (
                 <button
                   onClick={() => {
-                    ctx.setDataInicio('')
-                    ctx.setDataFim('')
+                    h.setDataInicio('')
+                    h.setDataFim('')
                   }}
                   className="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1 transition-colors"
                 >
@@ -172,7 +175,7 @@ export default function ClientesPage() {
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Data</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Nome</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">CPF</th>
-                {ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' && (
+                {h.usuario?.is_master && h.promotorFiltro === 'todos' && (
                   <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Promotor</th>
                 )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Convênio</th>
@@ -183,7 +186,7 @@ export default function ClientesPage() {
               </tr>
             </thead>
             <tbody>
-              {ctx.fatia.map((c) => (
+              {h.fatia.map((c) => (
                 <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-6 py-4 text-slate-700">
                     {c.data_cadastro
@@ -192,16 +195,16 @@ export default function ClientesPage() {
                   </td>
                   <td className="px-6 py-4 font-medium text-slate-900">{c.nome}</td>
                   <td className="px-6 py-4 text-slate-700">{c.cpf || '—'}</td>
-                  {ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' && (
+                  {h.usuario?.is_master && h.promotorFiltro === 'todos' && (
                     <td className="px-6 py-4 text-slate-700">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
-                        {(c.usuario_id && ctx.nomePromotorMap[c.usuario_id]) || '—'}
+                        {(c.usuario_id && h.nomePromotorMap[c.usuario_id]) || '—'}
                       </span>
                     </td>
                   )}
                   <td className="px-6 py-4 text-slate-700">
                     {c.convenio ? (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
                         {c.convenio}
                       </span>
                     ) : (
@@ -214,7 +217,7 @@ export default function ClientesPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       <button
-                        onClick={() => ctx.abrirEditar(c)}
+                        onClick={() => h.abrirEditar(c)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Editar"
                       >
@@ -222,13 +225,13 @@ export default function ClientesPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm(`Excluir o cliente "${c.nome}"?`)) ctx.handleDelete(c.id)
+                          if (confirm(`Excluir o cliente "${c.nome}"?`)) h.handleDelete(c.id)
                         }}
-                        disabled={ctx.deletando === c.id}
+                        disabled={h.deletando === c.id}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Excluir"
                       >
-                        {ctx.deletando === c.id ? (
+                        {h.deletando === c.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <Trash2 className="w-4 h-4" />
@@ -238,10 +241,10 @@ export default function ClientesPage() {
                   </td>
                 </tr>
               ))}
-              {ctx.fatia.length === 0 && (
+              {h.fatia.length === 0 && (
                 <tr>
                   <td
-                    colSpan={ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' ? 10 : 9}
+                    colSpan={h.usuario?.is_master && h.promotorFiltro === 'todos' ? 10 : 9}
                     className="px-6 py-12 text-center text-slate-500"
                   >
                     <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
@@ -256,33 +259,33 @@ export default function ClientesPage() {
 
         {/* Mobile Cards */}
         <div className="lg:hidden space-y-3">
-          {ctx.fatia.map((c) => (
+          {h.fatia.map((c) => (
             <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="font-semibold text-slate-900">{c.nome}</h3>
                   <p className="text-sm text-slate-500">{c.cpf || 'Sem CPF'}</p>
-                  {ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' && (
+                  {h.usuario?.is_master && h.promotorFiltro === 'todos' && (
                     <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
-                      {(c.usuario_id && ctx.nomePromotorMap[c.usuario_id]) || '—'}
+                      {(c.usuario_id && h.nomePromotorMap[c.usuario_id]) || '—'}
                     </span>
                   )}
                 </div>
                 <div className="flex gap-1">
                   <button
-                    onClick={() => ctx.abrirEditar(c)}
+                    onClick={() => h.abrirEditar(c)}
                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm(`Excluir "${c.nome}"?`)) ctx.handleDelete(c.id)
+                      if (confirm(`Excluir o cliente "${c.nome}"?`)) h.handleDelete(c.id)
                     }}
-                    disabled={ctx.deletando === c.id}
+                    disabled={h.deletando === c.id}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
                   >
-                    {ctx.deletando === c.id ? (
+                    {h.deletando === c.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Trash2 className="w-4 h-4" />
@@ -290,6 +293,7 @@ export default function ClientesPage() {
                   </button>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <span className="text-slate-500">Data:</span>{' '}
@@ -318,53 +322,54 @@ export default function ClientesPage() {
               </div>
             </div>
           ))}
-          {ctx.fatia.length === 0 && (
+
+          {h.fatia.length === 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
               <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
               <p className="font-medium">Nenhum cliente encontrado</p>
+              <p className="text-sm mt-1">Ajuste os filtros ou cadastre um novo cliente.</p>
             </div>
           )}
         </div>
 
         {/* Paginação */}
-        {ctx.totalPaginas > 1 && (
-          <div className="mt-6">
-            <Paginacao
-              paginaAtual={ctx.pag}
-              totalPaginas={ctx.totalPaginas}
-              onMudarPagina={ctx.setPagina}
-            />
-          </div>
+        {h.totalPaginas > 1 && (
+          <Paginacao
+            paginaAtual={h.pag}
+            totalPaginas={h.totalPaginas}
+            onMudarPagina={h.setPagina}
+          />
         )}
       </div>
 
-      {/* Modais */}
+      {/* Modal Cadastro / Edição */}
       <ClienteModal
-        show={ctx.showModal}
-        editando={ctx.editando}
-        formData={ctx.formData}
-        setFormData={ctx.setFormData}
-        saving={ctx.saving}
-        erroForm={ctx.erroForm}
-        onSubmit={ctx.handleSubmit}
-        onClose={ctx.fecharModal}
+        show={h.showModal}
+        editando={h.editando}
+        formData={h.formData}
+        setFormData={h.setFormData}
+        saving={h.saving}
+        erroForm={h.erroForm}
+        onClose={h.fecharModal}
+        onSubmit={h.handleSubmit}
       />
 
+      {/* Modal Importação */}
       <ImportModal
-        show={ctx.showImportModal}
-        step={ctx.importStep}
-        dados={ctx.importDados}
-        importando={ctx.importando}
-        resultado={ctx.importResultado}
-        dragOver={ctx.dragOver}
-        setDragOver={ctx.setDragOver}
-        fileInputRef={ctx.fileInputRef}
-        validosCount={ctx.validosCount}
-        invalidosCount={ctx.invalidosCountPreview}
-        onFileChange={ctx.onFileChange}
-        onDrop={ctx.onDrop}
-        onImportar={ctx.handleImportar}
-        onClose={ctx.fecharImport}
+        show={h.showImportModal}
+        step={h.importStep}
+        dados={h.importDados}
+        importando={h.importando}
+        resultado={h.importResultado}
+        dragOver={h.dragOver}
+        setDragOver={h.setDragOver}
+        fileInputRef={h.fileInputRef}
+        validosCount={h.validosCount}
+        invalidosCount={h.invalidosCountPreview}
+        onClose={h.fecharImport}
+        onFileChange={h.onFileChange}
+        onDrop={h.onDrop}
+        onImportar={h.handleImportar}
       />
     </div>
   )
