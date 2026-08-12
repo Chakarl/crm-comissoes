@@ -14,15 +14,22 @@ import {
   Menu,
   X,
   UserCog,
+  Timer,          // ← NOVO
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface NavbarProps {
   userName: string
   isMaster: boolean
-  userRole: string   // ← adicione isso
+  userRole: string
   onLogout: () => void
 }
+
+const TEMPO_INATIVIDADE = 30 * 60 // 30 minutos em segundos          // ← NOVO
+
+const EVENTOS_ATIVIDADE: (keyof WindowEventMap)[] = [                 // ← NOVO
+  'mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click',
+]
 
 function getSaudacao(): string {
   const hora = new Date().getHours()
@@ -39,10 +46,53 @@ function getPrimeiroNome(nome: string): string {
   return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase()
 }
 
+// ← NOVO — formata segundos em "MM:SS"
+function formatarTempo(seg: number): string {
+  const m = Math.floor(seg / 60)
+  const s = seg % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 export default function Navbar({ userName, isMaster, userRole, onLogout }: NavbarProps) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const [saudacao, setSaudacao] = useState(getSaudacao())
+
+  // ── Timer de inatividade ──                                        // ← NOVO (bloco inteiro)
+  const [restante, setRestante] = useState(TEMPO_INATIVIDADE)
+  const restanteRef = useRef(TEMPO_INATIVIDADE)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const resetTimer = useCallback(() => {
+    restanteRef.current = TEMPO_INATIVIDADE
+    setRestante(TEMPO_INATIVIDADE)
+  }, [])
+
+  useEffect(() => {
+    // Tick a cada segundo
+    intervalRef.current = setInterval(() => {
+      restanteRef.current -= 1
+      setRestante(restanteRef.current)
+
+      if (restanteRef.current <= 0) {
+        if (intervalRef.current) clearInterval(intervalRef.current)
+        onLogout()
+      }
+    }, 1000)
+
+    // Reseta ao detectar atividade
+    EVENTOS_ATIVIDADE.forEach((evt) =>
+      window.addEventListener(evt, resetTimer, { passive: true })
+    )
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      EVENTOS_ATIVIDADE.forEach((evt) =>
+        window.removeEventListener(evt, resetTimer)
+      )
+    }
+  }, [resetTimer, onLogout])
+  // ── Fim timer ──
 
   useEffect(() => {
     const interval = setInterval(() => setSaudacao(getSaudacao()), 60_000)
@@ -51,24 +101,31 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
 
   const primeiroNome = getPrimeiroNome(userName)
 
+  // ← NOVO — cor do timer muda conforme urgência
+  const timerCor =
+    restante <= 60
+      ? 'text-red-400'
+      : restante <= 5 * 60
+        ? 'text-amber-400'
+        : 'text-slate-400'
+
   const links = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/propostas', label: 'Propostas', icon: FileText },
-  { href: '/clientes', label: 'Clientes', icon: Users },
-  // Master e Supervisor veem "Cadastrar Usuário"; Promotor vê "Renovações"
-  ...(userRole === 'master' || userRole === 'supervisor'
-    ? [{ href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }]
-    : [{ href: '/renovacoes', label: 'Renovações', icon: Bell }]),
-  { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
-] 
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/propostas', label: 'Propostas', icon: FileText },
+    { href: '/clientes', label: 'Clientes', icon: Users },
+    ...(userRole === 'master' || userRole === 'supervisor'
+      ? [{ href: '/usuarios/novo', label: 'Cadastrar Usuário', icon: UserPlus }]
+      : [{ href: '/renovacoes', label: 'Renovações', icon: Bell }]),
+    { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  ]
 
   return (
     <nav className="bg-slate-900 border-b border-slate-800">
-      {/* ——— Linha 1: Logo + Saudação | Minha Conta + Sair ——— */}
+      {/* ——— Linha 1: Logo + Saudação | Timer + Minha Conta + Sair ——— */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
 
-           {/* Esquerda */}
+          {/* Esquerda */}
           <div className="flex items-center gap-4 flex-1 lg:flex-none justify-center lg:justify-start">
             <Link href="/dashboard" className="flex-shrink-0">
               <Image
@@ -91,6 +148,12 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
 
           {/* Direita — desktop */}
           <div className="hidden lg:flex items-center gap-2">
+            {/* ← NOVO — Timer desktop */}
+            <div className={`flex items-center gap-1.5 text-sm font-mono mr-2 ${timerCor}`} title="Tempo restante de sessão">
+              <Timer className="w-4 h-4" />
+              {formatarTempo(restante)}
+            </div>
+
             <Link
               href="/dashboard/minha-conta"
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
@@ -113,12 +176,20 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
           </div>
 
           {/* Hamburguer — mobile */}
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="lg:hidden text-slate-300 hover:text-white"
-          >
-            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          <div className="flex items-center gap-3 lg:hidden">
+            {/* ← NOVO — Timer mobile (sempre visível) */}
+            <div className={`flex items-center gap-1 text-xs font-mono ${timerCor}`}>
+              <Timer className="w-3.5 h-3.5" />
+              {formatarTempo(restante)}
+            </div>
+
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="text-slate-300 hover:text-white"
+            >
+              {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
