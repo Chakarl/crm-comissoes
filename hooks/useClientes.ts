@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
 import { formatarNomeProprio } from '@/lib/formatarNome'
@@ -118,10 +118,12 @@ export function useClientes() {
       if (usuario.is_master) carregarPromotores()
       loadClientes()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario])
 
   useEffect(() => {
     if (usuario) loadClientes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [promotorFiltro])
 
   useEffect(() => {
@@ -131,10 +133,10 @@ export function useClientes() {
   const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
     if (usuarios) {
-      const Promotores = usuarios
+      const promotores = usuarios
         .filter((u: any) => !u.is_master)
         .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
-      setListaPromotores(Promotores)
+      setListaPromotores(promotores)
     }
   }
 
@@ -181,6 +183,65 @@ export function useClientes() {
     setLoading(false)
   }
 
+  // ── Mapa de nomes de promotores ──
+  const nomePromotorMap: Record<string, string> = useMemo(() => {
+    const m: Record<string, string> = {}
+    listaPromotores.forEach((p) => {
+      m[p.id] = p.nome
+    })
+    return m
+  }, [listaPromotores])
+
+  // ── Datas disponíveis (para FiltroMes) ──
+  const datasDisponiveis = useMemo(() => {
+    const set = new Set<string>()
+    clientes.forEach((c) => {
+      if (c.data_cadastro) {
+        const mes = c.data_cadastro.slice(0, 7) // "YYYY-MM"
+        set.add(mes)
+      }
+    })
+    return Array.from(set).sort().reverse()
+  }, [clientes])
+
+  // ── Filtragem ──
+  const filtered = useMemo(() => {
+    let list = [...clientes]
+
+    if (search) {
+      const s = search.toLowerCase()
+      list = list.filter(
+        (c) =>
+          c.nome.toLowerCase().includes(s) ||
+          (c.cpf && c.cpf.replace(/\D/g, '').includes(s.replace(/\D/g, '')))
+      )
+    }
+
+    if (mesFiltro) {
+      list = list.filter((c) => c.data_cadastro && c.data_cadastro.startsWith(mesFiltro))
+    }
+
+    if (convenioFiltro !== 'todos') {
+      list = list.filter((c) => c.convenio === convenioFiltro)
+    }
+
+    if (dataInicio) {
+      list = list.filter((c) => c.data_cadastro && c.data_cadastro >= dataInicio)
+    }
+
+    if (dataFim) {
+      list = list.filter((c) => c.data_cadastro && c.data_cadastro <= dataFim)
+    }
+
+    return list
+  }, [clientes, search, mesFiltro, convenioFiltro, dataInicio, dataFim])
+
+  // ── Paginação ──
+  const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA))
+  const pag = Math.min(pagina, totalPaginas)
+  const fatia = filtered.slice((pag - 1) * POR_PAGINA, pag * POR_PAGINA)
+
+  // ── CRUD ──
   const abrirNovo = () => {
     setEditando(null)
     setFormData(emptyForm)
@@ -281,20 +342,18 @@ export function useClientes() {
           return
         }
 
-        const { error } = await supabase
-          .from('clientes')
-          .insert([
-            {
-              nome: nomeFormatado,
-              cpf: cpfMascara,
-              telefone: formData.telefone.replace(/\D/g, '') || null,
-              agencia: formData.agencia || null,
-              conta: formData.conta || null,
-              convenio: formData.convenio || null,
-              data_cadastro: formData.data_cadastro,
-              usuario_id: usuario.id,
-            },
-          ])
+        const { error } = await supabase.from('clientes').insert([
+          {
+            nome: nomeFormatado,
+            cpf: cpfMascara,
+            telefone: formData.telefone.replace(/\D/g, '') || null,
+            agencia: formData.agencia || null,
+            conta: formData.conta || null,
+            convenio: formData.convenio || null,
+            data_cadastro: formData.data_cadastro,
+            usuario_id: usuario.id,
+          },
+        ])
 
         if (error) {
           setErroForm(error.message)
@@ -428,48 +487,19 @@ export function useClientes() {
     loadClientes()
   }
 
-  // ── Helpers de layout ──
-
-  const nomePromotorMap: Record<string, string> = {}
-  listaPromotores.forEach((c) => {
-    nomePromotorMap[c.id] = c.nome
-  })
-
-  const datasDisponiveis = clientes
-    .map((c) => c.data_cadastro || c.ultimaProposta || '')
-    .filter(Boolean)
-
-  const filtered = clientes.filter((c) => {
-    const dataRef = c.data_cadastro || c.ultimaProposta || ''
-    const matchMes = !mesFiltro || dataRef.startsWith(mesFiltro)
-    const matchInicio = !dataInicio || dataRef >= dataInicio
-    const matchFim = !dataFim || dataRef <= dataFim
-    const matchConvenio = convenioFiltro === 'todos' || c.convenio === convenioFiltro
-    const matchSearch =
-      c.nome?.toLowerCase().includes(search.toLowerCase()) ||
-      c.cpf?.toLowerCase().includes(search.toLowerCase())
-    return matchMes && matchInicio && matchFim && matchConvenio && matchSearch
-  })
-
-  const totalPaginas = Math.ceil(filtered.length / POR_PAGINA)
-  const pag = Math.min(pagina, totalPaginas || 1)
-  const fatia = filtered.slice((pag - 1) * POR_PAGINA, pag * POR_PAGINA)
-
+  // ── Contadores de importação para o modal ──
   const validosCount = importDados.filter((d) => d.valido).length
   const invalidosCountPreview = importDados.filter((d) => !d.valido).length
 
   return {
-    // Auth
     usuario,
     loadingUser,
     loading,
-    // Lista
     clientes,
     filtered,
     fatia,
-    totalPaginas,
     pag,
-    // Busca e filtros
+    totalPaginas,
     search,
     setSearch,
     pagina,
@@ -477,30 +507,29 @@ export function useClientes() {
     mesFiltro,
     setMesFiltro,
     datasDisponiveis,
-    promotorFiltro,
-    setPromotorFiltro,
-    listaPromotores,
-    nomePromotorMap,
     convenioFiltro,
     setConvenioFiltro,
     dataInicio,
     setDataInicio,
     dataFim,
     setDataFim,
-    // Modal CRUD
+    promotorFiltro,
+    setPromotorFiltro,
+    listaPromotores,
+    nomePromotorMap,
     showModal,
     editando,
-    deletando,
     formData,
     setFormData,
     saving,
     erroForm,
+    deletando,
     abrirNovo,
     abrirEditar,
     fecharModal,
     handleSubmit,
     handleDelete,
-    // Import
+    // Importação
     showImportModal,
     importStep,
     importDados,

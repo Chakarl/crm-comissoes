@@ -13,7 +13,11 @@ import {
 } from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
-import { useClientes } from '@/hooks/useClientes'
+import {
+  useClientes,
+  CONVENIOS,
+  formatarTelefoneExibicao,
+} from '@/hooks/useClientes'
 import { ClienteModal } from '@/components/ClienteModal'
 import { ImportModal } from '@/components/ImportModal'
 
