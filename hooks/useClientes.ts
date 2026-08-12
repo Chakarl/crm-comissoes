@@ -206,38 +206,36 @@ export function useClientes() {
 
   // ── Filtragem ──
   const filtered = useMemo(() => {
-    let list = [...clientes]
+  let list = [...clientes]
 
-    if (search) {
-  const s = search.toLowerCase()
-  console.log('Buscando:', s)
-  console.log('Clientes:', list.map(c => c.nome))
-  list = list.filter(
-    (c) =>
-      c.nome.toLowerCase().includes(s) ||
-      (c.cpf && c.cpf.replace(/\D/g, '').includes(s.replace(/\D/g, '')))
-  )
-  console.log('Resultado:', list.length)
-}
+  if (search.trim()) {
+    const s = search.trim().toLowerCase()
+    list = list.filter((c) => {
+      const nome = (c.nome || '').toLowerCase()
+      const cpf = (c.cpf || '').replace(/\D/g, '')
+      const termo = s.replace(/\D/g, '')
+      return nome.includes(s) || (termo && cpf.includes(termo))
+    })
+  }
 
-    if (mesFiltro) {
-      list = list.filter((c) => c.data_cadastro && c.data_cadastro.startsWith(mesFiltro))
-    }
+  if (mesFiltro) {
+    list = list.filter((c) => c.data_cadastro && c.data_cadastro.startsWith(mesFiltro))
+  }
 
-    if (convenioFiltro !== 'todos') {
-      list = list.filter((c) => c.convenio === convenioFiltro)
-    }
+  if (convenioFiltro !== 'todos') {
+    list = list.filter((c) => c.convenio === convenioFiltro)
+  }
 
-    if (dataInicio) {
-      list = list.filter((c) => c.data_cadastro && c.data_cadastro >= dataInicio)
-    }
+  if (dataInicio) {
+    list = list.filter((c) => c.data_cadastro && c.data_cadastro >= dataInicio)
+  }
 
-    if (dataFim) {
-      list = list.filter((c) => c.data_cadastro && c.data_cadastro <= dataFim)
-    }
+  if (dataFim) {
+    list = list.filter((c) => c.data_cadastro && c.data_cadastro <= dataFim)
+  }
 
-    return list
-  }, [clientes, search, mesFiltro, convenioFiltro, dataInicio, dataFim])
+  return list
+}, [clientes, search, mesFiltro, convenioFiltro, dataInicio, dataFim])
 
   // ── Paginação ──
   const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA))
