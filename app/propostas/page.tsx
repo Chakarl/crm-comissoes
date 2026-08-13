@@ -22,6 +22,12 @@ interface Proposta {
   usuario_id: string
 }
 
+interface TipoProposta {
+  codigo: string
+  nome: string
+  categoria: string
+}
+
 export default function PropostasPage() {
   const { usuario, loading: loadingUser } = useUsuario()
   const [propostas, setPropostas] = useState<Proposta[]>([])
@@ -39,12 +45,14 @@ export default function PropostasPage() {
   const [dataInicio, setDataInicio] = useState<string>('')
   const [dataFim, setDataFim] = useState<string>('')
 
-  // ── NOVO: Filtro por tipo de proposta ──
+  // ── Filtro por tipo de proposta (dinâmico) ──
   const [tipoFiltro, setTipoFiltro] = useState<string>('todos')
+  const [listaTipos, setListaTipos] = useState<TipoProposta[]>([])
 
   useEffect(() => {
     if (usuario) {
       if (usuario.is_master) carregarPromotores()
+      carregarTipos()
       loadPropostas()
     }
   }, [usuario])
@@ -66,6 +74,15 @@ export default function PropostasPage() {
         .map((u: any) => ({ id: u.id, nome: u.nome || 'Sem nome' }))
       setListaPromotores(promotores)
     }
+  }
+
+  const carregarTipos = async () => {
+    const { data, error } = await supabase
+      .from('tipos_proposta')
+      .select('codigo, nome, categoria')
+      .order('categoria, nome')
+    if (data) setListaTipos(data)
+    if (error) console.error('Erro ao carregar tipos:', error)
   }
 
   const loadPropostas = async () => {
@@ -114,6 +131,17 @@ export default function PropostasPage() {
   const nomePromotorMap: Record<string, string> = {}
   listaPromotores.forEach((c) => { nomePromotorMap[c.id] = c.nome })
 
+  // Mapa código → nome do tipo para exibição legível
+  const nomeTipoMap: Record<string, string> = {}
+  listaTipos.forEach((t) => { nomeTipoMap[t.codigo] = t.nome })
+
+  // Agrupa tipos por categoria para o select
+  const tiposPorCategoria = listaTipos.reduce<Record<string, TipoProposta[]>>((acc, t) => {
+    if (!acc[t.categoria]) acc[t.categoria] = []
+    acc[t.categoria].push(t)
+    return acc
+  }, {})
+
   const filtered = propostas.filter((p) => {
     const matchMes = !mesFiltro || p.data_proposta?.startsWith(mesFiltro)
 
@@ -129,13 +157,13 @@ export default function PropostasPage() {
       matchIntervalo = false
     }
 
-    // ── NOVO: Filtro por tipo de proposta ──
+    // ── Filtro por tipo de proposta ──
     const matchTipo = tipoFiltro === 'todos' || p.tipo_proposta_codigo === tipoFiltro
 
     const matchSearch =
       p.numero_proposta?.toLowerCase().includes(search.toLowerCase()) ||
       p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
-    
+
     return matchMes && matchIntervalo && matchTipo && matchSearch
   })
 
@@ -199,7 +227,7 @@ export default function PropostasPage() {
           </div>
         )}
 
-        {/* Busca e Filtro por Tipo */}
+        {/* Busca + Filtro por Tipo */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -213,8 +241,8 @@ export default function PropostasPage() {
               />
             </div>
 
-            {/* NOVO: Filtro por tipo */}
-            <div className="relative min-w-[200px]">
+            {/* Filtro por tipo (dinâmico, agrupado por categoria) */}
+            <div className="relative min-w-[220px]">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <select
                 value={tipoFiltro}
@@ -222,12 +250,15 @@ export default function PropostasPage() {
                 className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
               >
                 <option value="todos">Todos os tipos</option>
-                <option value="CC">Cartão Consignado</option>
-                <option value="EC">Empréstimo Consignado</option>
-                <option value="PORT">Portabilidade</option>
-                <option value="REFIN">Refin</option>
-                <option value="SC">Saque Complementar</option>
-                <option value="CB">Cartão Benefício</option>
+                {Object.entries(tiposPorCategoria).map(([categoria, tipos]) => (
+                  <optgroup key={categoria} label={categoria}>
+                    {tipos.map((t) => (
+                      <option key={t.codigo} value={t.codigo}>
+                        {t.nome}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
           </div>
@@ -329,7 +360,7 @@ export default function PropostasPage() {
                   )}
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                      {p.tipo_proposta_codigo}
+                      {nomeTipoMap[p.tipo_proposta_codigo] || p.tipo_proposta_codigo}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-700">
@@ -397,7 +428,7 @@ export default function PropostasPage() {
                       #{p.numero_proposta}
                     </span>
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                      {p.tipo_proposta_codigo}
+                      {nomeTipoMap[p.tipo_proposta_codigo] || p.tipo_proposta_codigo}
                     </span>
                   </div>
                   <div className="text-sm font-semibold text-slate-900">
