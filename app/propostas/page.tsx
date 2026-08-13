@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
 import Link from 'next/link'
-import { Plus, Search, FileText, Pencil, Trash2, Users, CalendarDays, X } from 'lucide-react'
+import { Plus, Search, FileText, Pencil, Trash2, Users, CalendarDays, X, Filter } from 'lucide-react'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
 
@@ -39,6 +39,9 @@ export default function PropostasPage() {
   const [dataInicio, setDataInicio] = useState<string>('')
   const [dataFim, setDataFim] = useState<string>('')
 
+  // ── NOVO: Filtro por tipo de proposta ──
+  const [tipoFiltro, setTipoFiltro] = useState<string>('todos')
+
   useEffect(() => {
     if (usuario) {
       if (usuario.is_master) carregarPromotores()
@@ -53,7 +56,7 @@ export default function PropostasPage() {
 
   useEffect(() => {
     setPagina(1)
-  }, [search, mesFiltro, dataInicio, dataFim])
+  }, [search, mesFiltro, dataInicio, dataFim, tipoFiltro])
 
   const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
@@ -126,10 +129,14 @@ export default function PropostasPage() {
       matchIntervalo = false
     }
 
+    // ── NOVO: Filtro por tipo de proposta ──
+    const matchTipo = tipoFiltro === 'todos' || p.tipo_proposta_codigo === tipoFiltro
+
     const matchSearch =
       p.numero_proposta?.toLowerCase().includes(search.toLowerCase()) ||
       p.nome_cliente?.toLowerCase().includes(search.toLowerCase())
-    return matchMes && matchIntervalo && matchSearch
+    
+    return matchMes && matchIntervalo && matchTipo && matchSearch
   })
 
   const totalPaginas = Math.ceil(filtered.length / POR_PAGINA)
@@ -192,17 +199,37 @@ export default function PropostasPage() {
           </div>
         )}
 
-        {/* Busca */}
+        {/* Busca e Filtro por Tipo */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por número ou cliente..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por número ou cliente..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+              />
+            </div>
+
+            {/* NOVO: Filtro por tipo */}
+            <div className="relative min-w-[200px]">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={tipoFiltro}
+                onChange={(e) => setTipoFiltro(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+              >
+                <option value="todos">Todos os tipos</option>
+                <option value="CC">Cartão Consignado</option>
+                <option value="EC">Empréstimo Consignado</option>
+                <option value="PORT">Portabilidade</option>
+                <option value="REFIN">Refin</option>
+                <option value="SC">Saque Complementar</option>
+                <option value="CB">Cartão Benefício</option>
+              </select>
+            </div>
           </div>
         </div>
 
