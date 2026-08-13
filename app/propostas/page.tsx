@@ -109,21 +109,52 @@ export default function PropostasPage() {
     setLoading(false)
   }
 
+  // ═══════════════════════════════════════════════════════════
+  //  EXCLUSÃO — remove só parcelas pendentes, mantém as pagas
+  // ═══════════════════════════════════════════════════════════
   const handleDelete = async (id: string, numero: string) => {
-    if (
-      !confirm(
-        `Tem certeza que deseja excluir a proposta ${numero}?\nAs parcelas vinculadas também serão removidas.`
-      )
-    )
-      return
+    // 1. Buscar parcelas vinculadas à proposta
+    const { data: parcelas } = await supabase
+      .from('parcelas_comissao')
+      .select('id, pago')
+      .eq('proposta_id', id)
 
-    await supabase.from('parcelas_comissao').delete().eq('proposta_id', id)
-    const { error } = await supabase.from('propostas').delete().eq('id', id)
+    const pagas = parcelas?.filter((p) => p.pago === true) ?? []
+    const pendentes = parcelas?.filter((p) => !p.pago) ?? []
 
-    if (error) {
-      alert('Erro ao excluir: ' + error.message)
-    } else {
+    // 2. Montar mensagem de confirmação
+    let msg = `Excluir proposta ${numero}?\n`
+    if (pendentes.length > 0) {
+      msg += `\n→ ${pendentes.length} parcela(s) pendente(s) serão removidas.`
+    }
+    if (pagas.length > 0) {
+      msg += `\n→ ${pagas.length} parcela(s) já paga(s) serão mantidas.`
+    }
+
+    if (!confirm(msg)) return
+
+    // 3. Deletar apenas parcelas NÃO pagas
+    if (pendentes.length > 0) {
+      const idsPendentes = pendentes.map((p) => p.id)
+      await supabase
+        .from('parcelas_comissao')
+        .delete()
+        .in('id', idsPendentes)
+    }
+
+    // 4. Se não sobrou nenhuma parcela paga → exclui a proposta também
+    //    Se tem parcelas pagas → mantém a proposta no banco
+    if (pagas.length === 0) {
+      const { error } = await supabase.from('propostas').delete().eq('id', id)
+      if (error) {
+        alert('Erro ao excluir: ' + error.message)
+        return
+      }
       setPropostas((prev) => prev.filter((p) => p.id !== id))
+    } else {
+      alert(
+        `Parcelas pendentes removidas.\nA proposta foi mantida porque possui ${pagas.length} parcela(s) já paga(s).`
+      )
     }
   }
 
