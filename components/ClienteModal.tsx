@@ -1,12 +1,13 @@
 'use client'
 
-import { X, Loader2 } from 'lucide-react'
+import { X, Loader2, Cake } from 'lucide-react'
 import {
   ClienteComData,
   FormData,
   CONVENIOS,
   maskCPF,
   maskTelefone,
+  calcularIdade,
 } from '@/hooks/useClientes'
 
 interface Props {
@@ -31,6 +32,11 @@ export function ClienteModal({
   onClose,
 }: Props) {
   if (!show) return null
+
+  const idadeTexto =
+    formData.data_nascimento && formData.data_nascimento.length === 10
+      ? `${calcularIdade(formData.data_nascimento)} anos`
+      : null
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -98,6 +104,29 @@ export function ClienteModal({
               placeholder="(00) 00000-0000"
               maxLength={15}
             />
+          </div>
+
+          {/* Data de Nascimento + Idade */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Data de Nascimento
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="date"
+                value={formData.data_nascimento}
+                onChange={(e) =>
+                  setFormData({ ...formData, data_nascimento: e.target.value })
+                }
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {idadeTexto && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 text-sm font-semibold whitespace-nowrap">
+                  <Cake className="w-4 h-4" />
+                  {idadeTexto}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Convênio */}

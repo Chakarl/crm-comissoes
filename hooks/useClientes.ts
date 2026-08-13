@@ -9,15 +9,16 @@ import { parsarArquivoClientes, ClienteImportado } from '@/lib/importarClientes'
 const POR_PAGINA = 10
 
 export const CONVENIOS = [
-  'BB Dental',
-  'Capitalização',
-  'Consignado',
-  'Consórcio',
-  'Conta',
-  'INSS',
-  'Não Consignado',
-  'Portabilidade',
-  'Seguro',
+  'CONSORCIO',
+  'AUTOMÁTICO',
+  'ANTECIPAÇÃO 13',
+  'ABERTURA DE CONTA',
+  'CONSIGNADO/MP',
+  'CONSIGNADO/INSS',
+  'CONSIGNADO/IPSM',
+  'CONSIGNADO/IGEPREV',
+  'CONSIGNADO/ESTADO',
+  'CONSIGNADO/PREFEITURA',
 ]
 
 export interface Cliente {
@@ -29,6 +30,7 @@ export interface Cliente {
   conta: string | null
   convenio: string | null
   data_cadastro: string | null
+  data_nascimento: string | null
   usuario_id: string | null
 }
 
@@ -44,9 +46,12 @@ export const emptyForm = {
   conta: '',
   convenio: '',
   data_cadastro: new Date().toISOString().split('T')[0],
+  data_nascimento: '',
 }
 
 export type FormData = typeof emptyForm
+
+/* ── Máscaras ── */
 
 export function maskCPF(v: string) {
   return v
@@ -77,7 +82,29 @@ export function formatarTelefoneExibicao(tel: string | null): string {
   return tel
 }
 
+/* ── Helpers de idade / aniversário ── */
+
+export function calcularIdade(dataNascimento: string): number {
+  const hoje = new Date()
+  const nasc = new Date(dataNascimento + 'T00:00:00')
+  let idade = hoje.getFullYear() - nasc.getFullYear()
+  const mesAtual = hoje.getMonth()
+  const mesNasc = nasc.getMonth()
+  if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nasc.getDate())) {
+    idade--
+  }
+  return idade
+}
+
+export function isAniversarioHoje(dataNascimento: string): boolean {
+  const hoje = new Date()
+  const nasc = new Date(dataNascimento + 'T00:00:00')
+  return hoje.getDate() === nasc.getDate() && hoje.getMonth() === nasc.getMonth()
+}
+
 export { POR_PAGINA }
+
+/* ══════════════════════════════════════════════════════════════ */
 
 export function useClientes() {
   const { usuario, loading: loadingUser } = useUsuario()
@@ -112,6 +139,11 @@ export function useClientes() {
   } | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Aniversariantes do dia ──
+  const aniversariantes = useMemo(() => {
+    return clientes.filter((c) => c.data_nascimento && isAniversarioHoje(c.data_nascimento))
+  }, [clientes])
 
   useEffect(() => {
     if (usuario) {
@@ -197,7 +229,7 @@ export function useClientes() {
     const set = new Set<string>()
     clientes.forEach((c) => {
       if (c.data_cadastro) {
-        const mes = c.data_cadastro.slice(0, 7) // "YYYY-MM"
+        const mes = c.data_cadastro.slice(0, 7)
         set.add(mes)
       }
     })
@@ -206,36 +238,36 @@ export function useClientes() {
 
   // ── Filtragem ──
   const filtered = useMemo(() => {
-  let list = [...clientes]
+    let list = [...clientes]
 
-  if (search.trim()) {
-    const s = search.trim().toLowerCase()
-    list = list.filter((c) => {
-      const nome = (c.nome || '').toLowerCase()
-      const cpf = (c.cpf || '').replace(/\D/g, '')
-      const termo = s.replace(/\D/g, '')
-      return nome.includes(s) || (termo && cpf.includes(termo))
-    })
-  }
+    if (search.trim()) {
+      const s = search.trim().toLowerCase()
+      list = list.filter((c) => {
+        const nome = (c.nome || '').toLowerCase()
+        const cpf = (c.cpf || '').replace(/\D/g, '')
+        const termo = s.replace(/\D/g, '')
+        return nome.includes(s) || (termo && cpf.includes(termo))
+      })
+    }
 
-  if (mesFiltro) {
-    list = list.filter((c) => c.data_cadastro && c.data_cadastro.startsWith(mesFiltro))
-  }
+    if (mesFiltro) {
+      list = list.filter((c) => c.data_cadastro && c.data_cadastro.startsWith(mesFiltro))
+    }
 
-  if (convenioFiltro !== 'todos') {
-    list = list.filter((c) => c.convenio === convenioFiltro)
-  }
+    if (convenioFiltro !== 'todos') {
+      list = list.filter((c) => c.convenio === convenioFiltro)
+    }
 
-  if (dataInicio) {
-    list = list.filter((c) => c.data_cadastro && c.data_cadastro >= dataInicio)
-  }
+    if (dataInicio) {
+      list = list.filter((c) => c.data_cadastro && c.data_cadastro >= dataInicio)
+    }
 
-  if (dataFim) {
-    list = list.filter((c) => c.data_cadastro && c.data_cadastro <= dataFim)
-  }
+    if (dataFim) {
+      list = list.filter((c) => c.data_cadastro && c.data_cadastro <= dataFim)
+    }
 
-  return list
-}, [clientes, search, mesFiltro, convenioFiltro, dataInicio, dataFim])
+    return list
+  }, [clientes, search, mesFiltro, convenioFiltro, dataInicio, dataFim])
 
   // ── Paginação ──
   const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA))
@@ -260,6 +292,7 @@ export function useClientes() {
       conta: c.conta || '',
       convenio: c.convenio || '',
       data_cadastro: c.data_cadastro || new Date().toISOString().split('T')[0],
+      data_nascimento: c.data_nascimento || '',
     })
     setErroForm(null)
     setShowModal(true)
@@ -321,6 +354,7 @@ export function useClientes() {
             conta: formData.conta || null,
             convenio: formData.convenio || null,
             data_cadastro: formData.data_cadastro,
+            data_nascimento: formData.data_nascimento || null,
           })
           .eq('id', editando.id)
 
@@ -352,6 +386,7 @@ export function useClientes() {
             conta: formData.conta || null,
             convenio: formData.convenio || null,
             data_cadastro: formData.data_cadastro,
+            data_nascimento: formData.data_nascimento || null,
             usuario_id: usuario.id,
           },
         ])
@@ -426,7 +461,6 @@ export function useClientes() {
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) handleArquivo(file)
-    e.target.value = ''
   }
 
   const onDrop = (e: React.DragEvent) => {
@@ -435,6 +469,16 @@ export function useClientes() {
     const file = e.dataTransfer.files?.[0]
     if (file) handleArquivo(file)
   }
+
+  const validosCount = useMemo(
+    () => importDados.filter((d) => d.valido).length,
+    [importDados]
+  )
+
+  const invalidosCountPreview = useMemo(
+    () => importDados.filter((d) => !d.valido).length,
+    [importDados]
+  )
 
   const handleImportar = async () => {
     if (!usuario) return
@@ -445,12 +489,14 @@ export function useClientes() {
     let duplicados = 0
     let erros = 0
 
-    for (const cliente of validos) {
-      const cpfLimpo = cliente.cpf.replace(/\D/g, '')
+    for (const d of validos) {
+      const cpfMascara = maskCPF(d.cpf.replace(/\D/g, ''))
+      const cpfLimpo = d.cpf.replace(/\D/g, '')
+
       const { data: dup } = await supabase
         .from('clientes')
         .select('id')
-        .or(`cpf.eq.${cliente.cpf},cpf.eq.${cpfLimpo}`)
+        .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
         .limit(1)
         .maybeSingle()
 
@@ -459,15 +505,19 @@ export function useClientes() {
         continue
       }
 
-      const { error } = await supabase.from('clientes').insert({
-        nome: cliente.nome,
-        cpf: cliente.cpf,
-        telefone: cliente.telefone || null,
-        agencia: cliente.agencia || null,
-        conta: cliente.conta || null,
-        data_cadastro: cliente.data_cadastro || new Date().toISOString().split('T')[0],
-        usuario_id: usuario.id,
-      })
+      const { error } = await supabase.from('clientes').insert([
+        {
+          nome: formatarNomeProprio(d.nome),
+          cpf: cpfMascara,
+          telefone: d.telefone?.replace(/\D/g, '') || null,
+          agencia: d.agencia || null,
+          conta: d.conta || null,
+          convenio: d.convenio || null,
+          data_cadastro: d.data_cadastro || new Date().toISOString().split('T')[0],
+          data_nascimento: null,
+          usuario_id: usuario.id,
+        },
+      ])
 
       if (error) {
         erros++
@@ -476,61 +526,52 @@ export function useClientes() {
       }
     }
 
-    const invalidosCount = importDados.filter((d) => !d.valido).length
-
-    setImportResultado({
-      inseridos,
-      duplicados,
-      erros: erros + invalidosCount,
-    })
+    setImportResultado({ inseridos, duplicados, erros })
     setImportStep('resultado')
     setImportando(false)
     loadClientes()
   }
 
-  // ── Contadores de importação para o modal ──
-  const validosCount = importDados.filter((d) => d.valido).length
-  const invalidosCountPreview = importDados.filter((d) => !d.valido).length
-
   return {
     usuario,
     loadingUser,
-    loading,
     clientes,
-    filtered,
-    fatia,
-    pag,
-    totalPaginas,
+    loading,
     search,
     setSearch,
     pagina,
     setPagina,
     mesFiltro,
     setMesFiltro,
-    datasDisponiveis,
+    showModal,
+    editando,
+    deletando,
+    formData,
+    setFormData,
+    saving,
+    erroForm,
+    promotorFiltro,
+    setPromotorFiltro,
+    listaPromotores,
     convenioFiltro,
     setConvenioFiltro,
     dataInicio,
     setDataInicio,
     dataFim,
     setDataFim,
-    promotorFiltro,
-    setPromotorFiltro,
-    listaPromotores,
+    datasDisponiveis,
+    filtered,
+    totalPaginas,
+    pag,
+    fatia,
     nomePromotorMap,
-    showModal,
-    editando,
-    formData,
-    setFormData,
-    saving,
-    erroForm,
-    deletando,
+    aniversariantes,
     abrirNovo,
     abrirEditar,
     fecharModal,
     handleSubmit,
     handleDelete,
-    // Importação
+    // Import
     showImportModal,
     importStep,
     importDados,
