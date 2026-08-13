@@ -14,7 +14,7 @@ import {
   Menu,
   X,
   UserCog,
-  Timer,          // ← NOVO
+  Timer,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
@@ -25,9 +25,9 @@ interface NavbarProps {
   onLogout: () => void
 }
 
-const TEMPO_INATIVIDADE = 30 * 60 // 30 minutos em segundos          // ← NOVO
+const TEMPO_INATIVIDADE = 30 * 60 // 30 minutos em segundos
 
-const EVENTOS_ATIVIDADE: (keyof WindowEventMap)[] = [                 // ← NOVO
+const EVENTOS_ATIVIDADE: (keyof WindowEventMap)[] = [
   'mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click',
 ]
 
@@ -46,7 +46,6 @@ function getPrimeiroNome(nome: string): string {
   return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase()
 }
 
-// ← NOVO — formata segundos em "MM:SS"
 function formatarTempo(seg: number): string {
   const m = Math.floor(seg / 60)
   const s = seg % 60
@@ -58,10 +57,16 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
   const [menuOpen, setMenuOpen] = useState(false)
   const [saudacao, setSaudacao] = useState(getSaudacao())
 
-  // ── Timer de inatividade ──                                        // ← NOVO (bloco inteiro)
+  // ── Timer de inatividade ──
   const [restante, setRestante] = useState(TEMPO_INATIVIDADE)
   const restanteRef = useRef(TEMPO_INATIVIDADE)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Ref estável pro logout (nunca dispara re-mount do effect)
+  const onLogoutRef = useRef(onLogout)
+  useEffect(() => {
+    onLogoutRef.current = onLogout
+  }, [onLogout])
 
   const resetTimer = useCallback(() => {
     restanteRef.current = TEMPO_INATIVIDADE
@@ -69,18 +74,16 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
   }, [])
 
   useEffect(() => {
-    // Tick a cada segundo
     intervalRef.current = setInterval(() => {
       restanteRef.current -= 1
       setRestante(restanteRef.current)
 
       if (restanteRef.current <= 0) {
         if (intervalRef.current) clearInterval(intervalRef.current)
-        onLogout()
+        onLogoutRef.current()
       }
     }, 1000)
 
-    // Reseta ao detectar atividade
     EVENTOS_ATIVIDADE.forEach((evt) =>
       window.addEventListener(evt, resetTimer, { passive: true })
     )
@@ -91,7 +94,7 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
         window.removeEventListener(evt, resetTimer)
       )
     }
-  }, [resetTimer, onLogout])
+  }, [resetTimer])
   // ── Fim timer ──
 
   useEffect(() => {
@@ -101,7 +104,6 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
 
   const primeiroNome = getPrimeiroNome(userName)
 
-  // ← NOVO — cor do timer muda conforme urgência
   const timerCor =
     restante <= 60
       ? 'text-red-400'
@@ -148,7 +150,6 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
 
           {/* Direita — desktop */}
           <div className="hidden lg:flex items-center gap-2">
-            {/* ← NOVO — Timer desktop */}
             <div className={`flex items-center gap-1.5 text-sm font-mono mr-2 ${timerCor}`} title="Tempo restante de sessão">
               <Timer className="w-4 h-4" />
               {formatarTempo(restante)}
@@ -177,7 +178,6 @@ export default function Navbar({ userName, isMaster, userRole, onLogout }: Navba
 
           {/* Hamburguer — mobile */}
           <div className="flex items-center gap-3 lg:hidden">
-            {/* ← NOVO — Timer mobile (sempre visível) */}
             <div className={`flex items-center gap-1 text-xs font-mono ${timerCor}`}>
               <Timer className="w-3.5 h-3.5" />
               {formatarTempo(restante)}

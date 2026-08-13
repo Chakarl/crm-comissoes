@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Navbar from '@/components/Navbar'
 import './globals.css'
-
 
 export default function RootLayout({
   children,
@@ -75,10 +74,10 @@ export default function RootLayout({
     return () => subscription.unsubscribe()
   }, [supabase, router, pathname])
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await supabase.auth.signOut()
     router.push('/login')
-  }
+  }, [supabase, router])
 
   if (loading) {
     return (
