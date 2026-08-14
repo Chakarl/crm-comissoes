@@ -35,9 +35,9 @@ function corConvenio(convenio: string): string {
     'CONSIGNADO/MP':          'bg-rose-50 text-rose-700',
     'CONSIGNADO/INSS':        'bg-emerald-50 text-emerald-700',
     'CONSIGNADO/IPSM':        'bg-orange-50 text-orange-700',
-    'CONSIGNADO/IGEPREV':     'bg-indigo-50 text-indigo-700',
-    'CONSIGNADO/ESTADO':      'bg-teal-50 text-teal-700',
-    'CONSIGNADO/PREFEITURA':  'bg-pink-50 text-pink-700',
+    'CONSIGNADO/IGEPREV':     'bg-violet-50 text-violet-700',
+    'CONSIGNADO/ESTADO':      'bg-lime-50 text-lime-700',
+    'CONSIGNADO/PREFEITURA':  'bg-fuchsia-50 text-fuchsia-700',
   }
   return mapa[convenio] || 'bg-slate-50 text-slate-700'
 }
