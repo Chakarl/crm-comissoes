@@ -405,7 +405,7 @@ export default function ClientesPage() {
             <Paginacao
               paginaAtual={ctx.pag}
               totalPaginas={ctx.totalPaginas}
-              onMudarPagina={ctx.setPagina}
+              onMudar={ctx.setPagina}
             />
           </div>
         )}
