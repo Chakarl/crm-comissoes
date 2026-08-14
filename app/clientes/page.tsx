@@ -25,6 +25,23 @@ import {
 import { ClienteModal } from '@/components/ClienteModal'
 import { ImportModal } from '@/components/ImportModal'
 
+/* ── Cores por convênio ── */
+function corConvenio(convenio: string): string {
+  const mapa: Record<string, string> = {
+    'CONSORCIO':              'bg-blue-50 text-blue-700',
+    'AUTOMÁTICO':             'bg-purple-50 text-purple-700',
+    'ANTECIPAÇÃO 13':         'bg-amber-50 text-amber-700',
+    'ABERTURA DE CONTA':      'bg-cyan-50 text-cyan-700',
+    'CONSIGNADO/MP':          'bg-rose-50 text-rose-700',
+    'CONSIGNADO/INSS':        'bg-emerald-50 text-emerald-700',
+    'CONSIGNADO/IPSM':        'bg-orange-50 text-orange-700',
+    'CONSIGNADO/IGEPREV':     'bg-indigo-50 text-indigo-700',
+    'CONSIGNADO/ESTADO':      'bg-teal-50 text-teal-700',
+    'CONSIGNADO/PREFEITURA':  'bg-pink-50 text-pink-700',
+  }
+  return mapa[convenio] || 'bg-slate-50 text-slate-700'
+}
+
 export default function ClientesPage() {
   const ctx = useClientes()
 
@@ -247,9 +264,10 @@ export default function ClientesPage() {
                         </span>
                       </td>
                     )}
+                    {/* ✅ BADGE CONVÊNIO — DESKTOP (cor dinâmica) */}
                     <td className="px-6 py-4 text-slate-700">
                       {c.convenio ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${corConvenio(c.convenio)}`}>
                           {c.convenio}
                         </span>
                       ) : (
@@ -369,9 +387,16 @@ export default function ClientesPage() {
                       {c.data_nascimento ? `${calcularIdade(c.data_nascimento)} anos` : '—'}
                     </span>
                   </div>
+                  {/* ✅ BADGE CONVÊNIO — MOBILE (cor dinâmica) */}
                   <div>
                     <span className="text-slate-500">Convênio:</span>{' '}
-                    <span className="text-slate-700">{c.convenio || '—'}</span>
+                    {c.convenio ? (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${corConvenio(c.convenio)}`}>
+                        {c.convenio}
+                      </span>
+                    ) : (
+                      <span className="text-slate-700">—</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-slate-500">Agência:</span>{' '}
