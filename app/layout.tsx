@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Navbar from '@/components/Navbar'
+import { useInatividade } from '@/hooks/useInatividade'
 import './globals.css'
 
 export default function RootLayout({
@@ -19,6 +20,7 @@ export default function RootLayout({
   const [isMaster, setIsMaster] = useState(false)
   const [userRole, setUserRole] = useState<string>('promotor')
   const [loading, setLoading] = useState(true)
+  useInatividade(Boolean(user) && pathname !== '/login')
 
   const carregarDadosUsuario = async (userId: string, email?: string) => {
     const { data: userData } = await supabase

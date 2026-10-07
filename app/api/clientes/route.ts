@@ -3,8 +3,8 @@ import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { formatarNomeProprio } from '@/lib/formatarNome'
 
-function getSupabase() {
-  const cookieStore = cookies()
+async function getSupabase() {
+  const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -37,7 +37,7 @@ async function getUsuario(supabase: any) {
 }
 
 export async function GET(req: NextRequest) {
-  const supabase = getSupabase()
+  const supabase = await getSupabase()
   const usuario = await getUsuario(supabase)
 
   if (!usuario) {
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = getSupabase()
+  const supabase = await getSupabase()
   const usuario = await getUsuario(supabase)
 
   if (!usuario) {

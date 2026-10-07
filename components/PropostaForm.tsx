@@ -298,7 +298,22 @@ export function PropostaForm() {
       const { error: errParc } = await supabase
         .from("parcelas_comissao")
         .insert(parcelas);
-      if (errParc) throw errParc;
+      if (errParc) {
+        const { data: propostaRemovida, error: erroRollback } = await supabase
+          .from("propostas")
+          .delete()
+          .eq("id", proposta.id)
+          .select("id")
+          .maybeSingle();
+
+        if (erroRollback || !propostaRemovida) {
+          throw new Error(
+            `Não foi possível registrar as parcelas nem remover a proposta criada. Verifique a proposta ${proposta.numero_proposta || proposta.id}.`
+          );
+        }
+
+        throw errParc;
+      }
 
       const pctStr = calc.comissao_pct
         ? `${calc.comissao_pct}%`

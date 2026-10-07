@@ -19,6 +19,7 @@ export const CONVENIOS = [
   'CONSIGNADO/IGEPREV',
   'CONSIGNADO/ESTADO',
   'CONSIGNADO/PREFEITURA',
+  'CRÉDITO TRABALHADOR',
 ]
 
 export interface Cliente {

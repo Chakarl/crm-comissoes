@@ -2,8 +2,10 @@
 
 import { useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase'
 
 const TEMPO_INATIVIDADE = 30 * 60 * 1000 // 30 minutos em ms
+const supabase = createClient()
 
 const EVENTOS_ATIVIDADE: (keyof WindowEventMap)[] = [
   'mousedown',
@@ -14,16 +16,13 @@ const EVENTOS_ATIVIDADE: (keyof WindowEventMap)[] = [
   'click',
 ]
 
-export function useInatividade() {
+export function useInatividade(ativo: boolean) {
   const router = useRouter()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const logout = useCallback(async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' })
-    } catch {
-      // mesmo se falhar, redireciona
-    }
+    const { error } = await supabase.auth.signOut()
+    if (error) console.error('Erro ao encerrar sessão inativa:', error)
     router.replace('/login')
   }, [router])
 
@@ -33,6 +32,8 @@ export function useInatividade() {
   }, [logout])
 
   useEffect(() => {
+    if (!ativo) return
+
     // Inicia o timer ao montar
     resetTimer()
 
@@ -47,5 +48,5 @@ export function useInatividade() {
         window.removeEventListener(evt, resetTimer)
       )
     }
-  }, [resetTimer])
+  }, [ativo, resetTimer])
 }

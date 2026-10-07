@@ -163,7 +163,12 @@ export default function CadastrarUsuarioPage() {
         return
       }
 
-      mostrarNotificacao('sucesso', `Usuário "${nomeFormatado}" cadastrado com sucesso! Email de boas-vindas enviado.`)
+      mostrarNotificacao(
+        'sucesso',
+        data.aviso
+          ? `Usuário "${nomeFormatado}" cadastrado. ${data.aviso}`
+          : `Usuário "${nomeFormatado}" cadastrado com sucesso! Email de boas-vindas enviado.`
+      )
 
       setNome('')
       setEmail('')

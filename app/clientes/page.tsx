@@ -12,7 +12,9 @@ import {
   CalendarDays,
   Cake,
   PartyPopper,
+  Download,
 } from 'lucide-react'
+import * as XLSX from '@e965/xlsx'
 import { Paginacao } from '@/components/Paginacao'
 import { FiltroMes } from '@/components/FiltroMes'
 import {
@@ -38,12 +40,44 @@ function corConvenio(convenio: string): string {
     'CONSIGNADO/IGEPREV':     'bg-violet-50 text-violet-700',
     'CONSIGNADO/ESTADO':      'bg-lime-50 text-lime-700',
     'CONSIGNADO/PREFEITURA':  'bg-fuchsia-50 text-fuchsia-700',
+    'CRÉDITO TRABALHADOR':    'bg-sky-50 text-sky-700',
   }
   return mapa[convenio] || 'bg-slate-50 text-slate-700'
 }
 
 export default function ClientesPage() {
   const ctx = useClientes()
+
+  const exportarClientes = () => {
+    const linhas = ctx.filtered.map((cliente) => [
+      cliente.data_cadastro
+        ? new Date(`${cliente.data_cadastro}T00:00:00`).toLocaleDateString('pt-BR')
+        : '',
+      cliente.nome || '',
+      cliente.telefone || '',
+      cliente.cpf || '',
+      cliente.convenio || '',
+    ])
+    const planilha = XLSX.utils.aoa_to_sheet([
+      ['Data', 'Nome do cliente', 'Telefone', 'CPF', 'Convênio'],
+      ...linhas,
+    ])
+
+    planilha['!cols'] = [
+      { wch: 14 },
+      { wch: 32 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 24 },
+    ]
+
+    const arquivo = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(arquivo, planilha, 'Clientes')
+    XLSX.writeFile(
+      arquivo,
+      `clientes-${new Date().toISOString().slice(0, 10)}.xlsx`
+    )
+  }
 
   if (ctx.loadingUser || ctx.loading) {
     return (
@@ -98,6 +132,15 @@ export default function ClientesPage() {
           </div>
 
           <div className="flex gap-3 w-full sm:w-auto">
+            <button
+              onClick={exportarClientes}
+              disabled={ctx.filtered.length === 0}
+              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base flex-1 sm:flex-none justify-center"
+              title="Exportar clientes que correspondem aos filtros atuais"
+            >
+              <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+              Exportar .xlsx
+            </button>
             <button
               onClick={ctx.abrirImport}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base flex-1 sm:flex-none justify-center"

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUsuario } from '@/hooks/useUsuario'
 import { Search, FileSpreadsheet, FileText, Users as UsersIcon } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import * as XLSX from '@e965/xlsx'
 
 const supabase = createClient()
 

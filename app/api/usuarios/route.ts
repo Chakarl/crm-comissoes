@@ -1,3 +1,12 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import bcrypt from 'bcryptjs'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { enviarEmailBoasVindas } from '@/lib/email'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
 export async function POST(request: NextRequest) {
   let authUserId: string | null = null
 
@@ -5,21 +14,30 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, senha, nome, telefone, endereco, token } = body
 
-    if (!email || !senha || !nome || !telefone) {
+    if (
+      typeof email !== 'string' ||
+      typeof senha !== 'string' ||
+      typeof nome !== 'string' ||
+      typeof telefone !== 'string' ||
+      typeof token !== 'string' ||
+      !email.trim() ||
+      !senha ||
+      !nome.trim() ||
+      !telefone.trim()
+    ) {
       return NextResponse.json(
         { erro: 'Campos obrigatórios: email, senha, nome, telefone' },
         { status: 400 }
       )
     }
 
-    const telefoneFormatado = formatarTelefone(telefone)
+    const telefoneFormatado = telefone.replace(/\D/g, '')
+    if (telefoneFormatado.length < 10 || telefoneFormatado.length > 11) {
+      return NextResponse.json({ erro: 'Telefone inválido.' }, { status: 400 })
+    }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const authClient = createClient(supabaseUrl, supabaseAnonKey)
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
 
     if (authError || !user) {
       return NextResponse.json(
@@ -28,171 +46,136 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ✅ Verifica permissão: master OU supervisor
     const { data: usuarioLogado, error: usuarioError } = await supabaseAdmin
       .from('usuarios')
-      .select('is_master, role')
+      .select('id, is_master, role')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (usuarioError) {
       console.error('Erro ao verificar permissões:', usuarioError)
-      return NextResponse.json(
-        { erro: 'Erro ao verificar permissões' },
-        { status: 500 }
-      )
+      return NextResponse.json({ erro: 'Erro ao verificar permissões' }, { status: 500 })
     }
 
-    const podeCadastrar = usuarioLogado?.is_master || usuarioLogado?.role === 'supervisor'
-
-    if (!podeCadastrar) {
+    if (!usuarioLogado || (!usuarioLogado.is_master && usuarioLogado.role !== 'supervisor')) {
       return NextResponse.json(
         { erro: 'Sem permissão para cadastrar usuários' },
         { status: 403 }
       )
     }
 
-    console.log('📝 Iniciando cadastro:', email)
-
-    // 1. Verifica se email já existe na tabela
+    const emailNormalizado = email.trim().toLowerCase()
     const { data: emailExiste, error: checkError } = await supabaseAdmin
       .from('usuarios')
       .select('id')
-      .eq('email', email)
+      .eq('email', emailNormalizado)
       .maybeSingle()
 
     if (checkError) {
       console.error('Erro ao verificar email:', checkError)
-      return NextResponse.json(
-        { erro: 'Erro ao verificar email' },
-        { status: 500 }
-      )
+      return NextResponse.json({ erro: 'Erro ao verificar email' }, { status: 500 })
     }
 
     if (emailExiste) {
-      console.log('❌ Email já cadastrado:', email)
-      return NextResponse.json(
-        { erro: 'Este e-mail já está cadastrado' },
-        { status: 400 }
-      )
+      return NextResponse.json({ erro: 'Este e-mail já está cadastrado' }, { status: 409 })
     }
 
-    // 2. Gera hash da senha
+    const roleSolicitada = body.role
+    if (usuarioLogado.is_master && roleSolicitada && !['promotor', 'supervisor'].includes(roleSolicitada)) {
+      return NextResponse.json({ erro: 'Perfil de usuário inválido.' }, { status: 400 })
+    }
+    const roleFinal =
+      usuarioLogado.is_master && roleSolicitada === 'supervisor'
+        ? 'supervisor'
+        : 'promotor'
+
     const senhaHash = await bcrypt.hash(senha, 10)
-    console.log('🔒 Senha hashada gerada')
+    const { data: authData, error: createError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: emailNormalizado,
+        password: senha,
+        email_confirm: true,
+        user_metadata: { nome: nome.trim() },
+      })
 
-    // 3. Cria usuário no Auth
-    let authData
-    try {
-      authData = await criarUsuarioViaAPI(
-        email,
-        senha,
-        nome,
-        telefoneFormatado,
-        endereco,
-        senhaHash,
-        user.id
-      )
-    } catch (error: any) {
-      console.error('❌ Erro ao criar no Auth:', error)
-
-      if (
-        error.message?.toLowerCase().includes('already') ||
-        error.message?.toLowerCase().includes('exists')
-      ) {
-        return NextResponse.json(
-          { erro: 'Este e-mail já está cadastrado no sistema de autenticação' },
-          { status: 400 }
-        )
-      }
-
+    if (createError || !authData.user) {
+      const duplicated =
+        createError?.message.toLowerCase().includes('already') ||
+        createError?.message.toLowerCase().includes('exists')
       return NextResponse.json(
-        { erro: `Erro ao criar usuário: ${error.message}` },
-        { status: 500 }
+        { erro: duplicated ? 'Este e-mail já está cadastrado no sistema de autenticação' : 'Erro ao criar usuário.' },
+        { status: duplicated ? 409 : 500 }
       )
     }
 
-    if (!authData?.id) {
-      return NextResponse.json(
-        { erro: 'Falha ao criar usuário no Auth' },
-        { status: 500 }
-      )
-    }
+    authUserId = authData.user.id
 
-    authUserId = authData.id
-
-    // 4. Aguarda o trigger popular a tabela e verifica
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    const { data: novoUsuario, error: verificaError } = await supabaseAdmin
+    const { data: perfil, error: perfilError } = await supabaseAdmin
       .from('usuarios')
-      .select('*')
+      .select('id')
       .eq('id', authUserId)
-      .single()
+      .maybeSingle()
 
-    if (verificaError || !novoUsuario) {
-      console.error('❌ Trigger não criou o registro:', verificaError)
-      await deletarUsuarioAuth(authUserId)
-      return NextResponse.json(
-        { erro: 'Erro ao salvar dados do usuário' },
-        { status: 500 }
-      )
+    if (perfilError || !perfil) {
+      throw new Error('O perfil do usuário não foi criado pelo sistema de autenticação.')
     }
-
-    // 5. ✅ SEMPRE atualiza — supervisor só cria promotor, master escolhe
-    const roleFinal = usuarioLogado?.is_master
-      ? (body.role || 'promotor')
-      : 'promotor'
 
     const { error: updateError } = await supabaseAdmin
       .from('usuarios')
       .update({
-        nome: nome,
+        auth_id: authUserId,
+        email: emailNormalizado,
+        nome: nome.trim(),
         telefone: telefoneFormatado,
-        endereco: endereco || null,
+        endereco: typeof endereco === 'string' && endereco.trim() ? endereco.trim() : null,
         senha_hash: senhaHash,
         role: roleFinal,
         is_master: false,
         ativo: true,
-        criado_por: user.id
+        criado_por: usuarioLogado.id,
       })
       .eq('id', authUserId)
 
-    if (updateError) {
-      console.error('❌ Falha ao atualizar registro:', updateError)
-    }
+    if (updateError) throw updateError
 
-    // 6. Envia email de boas-vindas
-    console.log('📧 Enviando email de boas-vindas...')
+    let aviso: string | undefined
     try {
-      await enviarEmailBoasVindas(email, nome, senha)
-      console.log('✅ Email enviado com sucesso')
-    } catch (emailError) {
-      console.error('⚠️ Falha ao enviar email (usuário criado mesmo assim):', emailError)
-    }
-
-    return NextResponse.json({
-      sucesso: true,
-      usuario: {
-        id: authUserId,
-        nome,
-        email,
+      await enviarEmailBoasVindas({
+        email: emailNormalizado,
+        nome: nome.trim(),
+        senha,
         telefone: telefoneFormatado,
-        endereco,
-        role: roleFinal,
-      }
-    })
-
-  } catch (error: any) {
-    console.error('❌ Erro geral no POST:', error)
-
-    if (authUserId) {
-      await deletarUsuarioAuth(authUserId)
+      })
+    } catch (emailError) {
+      console.error('Falha ao enviar email de boas-vindas:', emailError)
+      aviso = 'Usuário criado, mas não foi possível enviar o email de boas-vindas.'
     }
 
     return NextResponse.json(
-      { erro: error.message || 'Erro interno do servidor' },
-      { status: 500 }
+      {
+        sucesso: true,
+        ...(aviso ? { aviso } : {}),
+        usuario: {
+          id: authUserId,
+          nome: nome.trim(),
+          email: emailNormalizado,
+          telefone: telefoneFormatado,
+          endereco,
+          role: roleFinal,
+        },
+      },
+      { status: 201 }
     )
+  } catch (error) {
+    console.error('Erro ao cadastrar usuário:', error)
+
+    if (authUserId) {
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authUserId)
+      if (deleteError) {
+        console.error('Falha ao remover usuário após erro no cadastro:', deleteError)
+      }
+    }
+
+    return NextResponse.json({ erro: 'Erro interno ao cadastrar usuário.' }, { status: 500 })
   }
 }

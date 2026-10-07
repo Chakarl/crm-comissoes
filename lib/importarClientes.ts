@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from '@e965/xlsx'
 
 export interface ClienteImportado {
   nome: string
@@ -6,6 +6,7 @@ export interface ClienteImportado {
   telefone: string | null
   agencia: string | null
   conta: string | null
+  convenio?: string | null
   data_cadastro: string | null
   valido: boolean
   erro?: string
@@ -183,8 +184,17 @@ export async function parsarArquivoClientes(
   const colAgencia = encontrarColuna(headers, ['agencia', 'ag'])
   const colConta = encontrarColuna(headers, ['conta', 'account', 'cc'])
   const colTel = encontrarColuna(headers, ['telefone', 'celular', 'fone', 'phone', 'tel'])
+  const colConvenio = encontrarColuna(headers, ['convenio', 'convênio', 'produto'])
 
-  console.log('[IMPORT] Índices:', { colData, colNome, colCPF, colAgencia, colConta, colTel })
+  console.log('[IMPORT] Índices:', {
+    colData,
+    colNome,
+    colCPF,
+    colAgencia,
+    colConta,
+    colTel,
+    colConvenio,
+  })
 
   if (colNome < 0 || colCPF < 0) {
     return [{
@@ -290,6 +300,7 @@ export async function parsarArquivoClientes(
       telefone,
       agencia,
       conta,
+      convenio: colConvenio >= 0 ? extrairValor(row, colConvenio) || null : null,
       data_cadastro: dataCadastro,
       valido: true,
     })
