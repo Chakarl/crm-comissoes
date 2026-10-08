@@ -40,6 +40,7 @@ function corConvenio(convenio: string): string {
     'CONSIGNADO/IGEPREV':     'bg-violet-50 text-violet-700',
     'CONSIGNADO/ESTADO':      'bg-lime-50 text-lime-700',
     'CONSIGNADO/PREFEITURA':  'bg-fuchsia-50 text-fuchsia-700',
+    'CONSIGNADO/TJTO':        'bg-teal-50 text-teal-700',
     'CRÉDITO TRABALHADOR':    'bg-sky-50 text-sky-700',
   }
   return mapa[convenio] || 'bg-slate-50 text-slate-700'
