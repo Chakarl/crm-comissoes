@@ -38,6 +38,7 @@ export interface Cliente {
 
 export interface ClienteComData extends Cliente {
   ultimaProposta: string | null
+  quantidadePropostas: number
 }
 
 export const emptyForm = {
@@ -112,6 +113,7 @@ export function useClientes() {
   const { usuario, loading: loadingUser } = useUsuario()
   const [clientes, setClientes] = useState<ClienteComData[]>([])
   const [loading, setLoading] = useState(true)
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [pagina, setPagina] = useState(1)
   const [mesFiltro, setMesFiltro] = useState<string | null>(null)
@@ -126,6 +128,9 @@ export function useClientes() {
   const [promotorFiltro, setPromotorFiltro] = useState<string>('todos')
   const [listaPromotores, setListaPromotores] = useState<{ id: string; nome: string }[]>([])
   const [convenioFiltro, setConvenioFiltro] = useState<string>('todos')
+  const [situacaoContratacao, setSituacaoContratacao] = useState<
+    'todos' | 'contratou' | 'sem_contratacao'
+  >('todos')
   const [dataInicio, setDataInicio] = useState<string>('')
   const [dataFim, setDataFim] = useState<string>('')
 
@@ -162,7 +167,7 @@ export function useClientes() {
 
   useEffect(() => {
     setPagina(1)
-  }, [search, mesFiltro, dataInicio, dataFim, convenioFiltro])
+  }, [search, mesFiltro, dataInicio, dataFim, convenioFiltro, situacaoContratacao])
 
   const carregarPromotores = async () => {
     const { data: usuarios } = await supabase.rpc('listar_todos_usuarios')
@@ -177,6 +182,7 @@ export function useClientes() {
   const loadClientes = async () => {
     if (!usuario) return
     setLoading(true)
+    setErroCarregamento(null)
 
     let queryClientes = supabase.from('clientes').select('*').order('nome', { ascending: true })
 
@@ -186,7 +192,9 @@ export function useClientes() {
       queryClientes = queryClientes.eq('usuario_id', promotorFiltro)
     }
 
-    let queryPropostas = supabase.from('propostas').select('nome_cliente, data_proposta')
+    let queryPropostas = supabase
+      .from('propostas')
+      .select('cliente_id, cpf_cliente, nome_cliente, data_proposta')
 
     if (!usuario.is_master) {
       queryPropostas = queryPropostas.eq('usuario_id', usuario.id)
@@ -194,24 +202,66 @@ export function useClientes() {
       queryPropostas = queryPropostas.eq('usuario_id', promotorFiltro)
     }
 
-    const { data: clientesData } = await queryClientes
-    const { data: propostasData } = await queryPropostas
+    const [
+      { data: clientesData, error: erroClientes },
+      { data: propostasData, error: erroPropostas },
+    ] = await Promise.all([queryClientes, queryPropostas])
 
-    const mapaData: Record<string, string> = {}
+    if (erroClientes || erroPropostas) {
+      const error = erroClientes || erroPropostas
+      console.error('Erro ao carregar clientes e propostas:', error)
+      setClientes([])
+      setErroCarregamento('Não foi possível carregar clientes e contratações. Tente novamente.')
+      setLoading(false)
+      return
+    }
+
+    const propostasPorCliente: Record<string, { quantidade: number; ultimaData: string | null }> = {}
+    const propostasPorCpf: Record<string, { quantidade: number; ultimaData: string | null }> = {}
+    const propostasPorNome: Record<string, { quantidade: number; ultimaData: string | null }> = {}
+
+    const registrarProposta = (
+      mapa: Record<string, { quantidade: number; ultimaData: string | null }>,
+      chave: string | null | undefined,
+      data: string | null
+    ) => {
+      if (!chave) return
+      const registro = mapa[chave] || { quantidade: 0, ultimaData: null }
+      registro.quantidade += 1
+      if (data && (!registro.ultimaData || data > registro.ultimaData)) {
+        registro.ultimaData = data
+      }
+      mapa[chave] = registro
+    }
+
     if (propostasData) {
       propostasData.forEach((p) => {
-        if (!p.nome_cliente || !p.data_proposta) return
-        const nome = p.nome_cliente.toLowerCase()
-        if (!mapaData[nome] || p.data_proposta > mapaData[nome]) {
-          mapaData[nome] = p.data_proposta
-        }
+        registrarProposta(propostasPorCliente, p.cliente_id, p.data_proposta)
+        registrarProposta(
+          propostasPorCpf,
+          p.cpf_cliente?.replace(/\D/g, ''),
+          p.data_proposta
+        )
+        registrarProposta(
+          propostasPorNome,
+          p.nome_cliente?.trim().toLocaleLowerCase('pt-BR'),
+          p.data_proposta
+        )
       })
     }
 
-    const resultado: ClienteComData[] = (clientesData || []).map((c) => ({
-      ...c,
-      ultimaProposta: mapaData[c.nome.toLowerCase()] || null,
-    }))
+    const resultado: ClienteComData[] = (clientesData || []).map((c) => {
+      const registro =
+        propostasPorCliente[c.id] ||
+        propostasPorCpf[c.cpf?.replace(/\D/g, '') || ''] ||
+        propostasPorNome[c.nome.trim().toLocaleLowerCase('pt-BR')]
+
+      return {
+        ...c,
+        ultimaProposta: registro?.ultimaData || null,
+        quantidadePropostas: registro?.quantidade || 0,
+      }
+    })
 
     setClientes(resultado)
     setLoading(false)
@@ -260,6 +310,12 @@ export function useClientes() {
       list = list.filter((c) => c.convenio === convenioFiltro)
     }
 
+    if (situacaoContratacao === 'contratou') {
+      list = list.filter((c) => c.quantidadePropostas > 0)
+    } else if (situacaoContratacao === 'sem_contratacao') {
+      list = list.filter((c) => c.quantidadePropostas === 0)
+    }
+
     if (dataInicio) {
       list = list.filter((c) => c.data_cadastro && c.data_cadastro >= dataInicio)
     }
@@ -269,7 +325,15 @@ export function useClientes() {
     }
 
     return list
-  }, [clientes, search, mesFiltro, convenioFiltro, dataInicio, dataFim])
+  }, [
+    clientes,
+    search,
+    mesFiltro,
+    convenioFiltro,
+    situacaoContratacao,
+    dataInicio,
+    dataFim,
+  ])
 
   // ── Paginação ──
   const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA))
@@ -539,6 +603,8 @@ export function useClientes() {
     loadingUser,
     clientes,
     loading,
+    erroCarregamento,
+    recarregar: loadClientes,
     search,
     setSearch,
     pagina,
@@ -557,6 +623,8 @@ export function useClientes() {
     listaPromotores,
     convenioFiltro,
     setConvenioFiltro,
+    situacaoContratacao,
+    setSituacaoContratacao,
     dataInicio,
     setDataInicio,
     dataFim,

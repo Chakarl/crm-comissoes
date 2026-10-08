@@ -13,6 +13,8 @@ import {
   Cake,
   PartyPopper,
   Download,
+  FileCheck2,
+  AlertCircle,
 } from 'lucide-react'
 import * as XLSX from '@e965/xlsx'
 import { Paginacao } from '@/components/Paginacao'
@@ -91,6 +93,24 @@ export default function ClientesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
+
+        {ctx.erroCarregamento && (
+          <div
+            role="alert"
+            className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0" />
+              <p className="text-sm font-medium">{ctx.erroCarregamento}</p>
+            </div>
+            <button
+              onClick={ctx.recarregar}
+              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
         {/* 🎂 Banner de aniversariantes */}
         {ctx.aniversariantes.length > 0 && (
@@ -205,9 +225,33 @@ export default function ClientesPage() {
           datasDisponiveis={ctx.datasDisponiveis}
         />
 
-        {/* Filtro Convênio + Período */}
+        {/* Filtro por contratação, convênio e período */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-8">
+            {/* Situação da contratação */}
+            <div className="flex items-center gap-2">
+              <FileCheck2 className="w-4 h-4 text-blue-500" />
+              <span className="text-sm font-medium text-slate-600">Contratação:</span>
+              <select
+                value={ctx.situacaoContratacao}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (
+                    value === 'todos' ||
+                    value === 'contratou' ||
+                    value === 'sem_contratacao'
+                  ) {
+                    ctx.setSituacaoContratacao(value)
+                  }
+                }}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="todos">Todos os clientes</option>
+                <option value="contratou">Com proposta registrada</option>
+                <option value="sem_contratacao">Sem proposta registrada</option>
+              </select>
+            </div>
+
             {/* Convênio */}
             <div className="flex items-center gap-2">
               <UsersIcon className="w-4 h-4 text-emerald-500" />
