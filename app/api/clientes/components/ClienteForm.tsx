@@ -10,6 +10,7 @@ interface ClienteFormProps {
     telefone: string | null
     agencia: string | null
     conta: string | null
+    margem_disponivel?: number | null
   }
   onSuccess: () => void
 }
@@ -21,6 +22,7 @@ export default function ClienteForm({ cliente, onSuccess }: ClienteFormProps) {
     telefone: cliente?.telefone || '',
     agencia: cliente?.agencia || '',
     conta: cliente?.conta || '',
+    margem_disponivel: cliente?.margem_disponivel?.toString() || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -115,7 +117,17 @@ export default function ClienteForm({ cliente, onSuccess }: ClienteFormProps) {
         </div>
       </div>
 
-      <button
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Margem disponível (R$)</label>
+        <input
+          type="number"
+          step="0.01"
+          inputMode="decimal"
+          value={form.margem_disponivel}
+          onChange={(e) => setForm({ ...form, margem_disponivel: e.target.value })}
+          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+        />
+      </div>      <button
         type="submit"
         disabled={loading}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-medium py-2.5 rounded-lg transition-colors"

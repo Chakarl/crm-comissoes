@@ -17,6 +17,7 @@ interface Proposta {
   data_proposta: string
   nome_cliente: string
   valor_contratado: number
+  valor_parcela: number | null
   prazo: number | null
   comissao_total: number
   usuario_id: string
@@ -92,7 +93,7 @@ export default function PropostasPage() {
     let query = supabase
       .from('propostas')
       .select(
-        'id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total, usuario_id'
+        'id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, valor_parcela, prazo, comissao_total, usuario_id'
       )
       .order('data_proposta', { ascending: false })
 
@@ -365,6 +366,10 @@ export default function PropostasPage() {
                   Valor
                 </th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
+                  Parcela
+
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
                   Comissão
                 </th>
                 <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">
@@ -405,6 +410,9 @@ export default function PropostasPage() {
                       currency: 'BRL',
                     })}
                   </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {p.valor_parcela == null ? "—" : p.valor_parcela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </td>
                   <td className="px-6 py-4 font-semibold text-green-700">
                     {p.comissao_total.toLocaleString('pt-BR', {
                       style: 'currency',
@@ -434,7 +442,7 @@ export default function PropostasPage() {
               {fatia.length === 0 && (
                 <tr>
                   <td
-                    colSpan={usuario?.is_master && promotorFiltro === 'todos' ? 8 : 7}
+                    colSpan={usuario?.is_master && promotorFiltro === 'todos' ? 9 : 8}
                     className="px-6 py-12 text-center text-slate-500"
                   >
                     Nenhuma proposta encontrada.
@@ -505,7 +513,14 @@ export default function PropostasPage() {
                     })}
                   </span>
                 </div>
-                <div className="col-span-2">
+                {p.valor_parcela != null && (
+                  <div>
+                    <span className="text-slate-500">Parcela:</span>{' '}
+                    <span className="text-slate-700">
+                      {p.valor_parcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                )}                <div className="col-span-2">
                   <span className="text-slate-500">Comissão:</span>{' '}
                   <span className="font-semibold text-green-700">
                     {p.comissao_total.toLocaleString('pt-BR', {

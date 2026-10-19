@@ -23,6 +23,10 @@ export const CONVENIOS = [
   'CRÉDITO TRABALHADOR',
 ]
 
+export function isConvenioConsignado(convenio: string | null | undefined): boolean {
+  return Boolean(convenio && (convenio.startsWith('CONSIGNADO/') || convenio === 'CRÉDITO TRABALHADOR'))
+}
+
 export interface Cliente {
   id: string
   nome: string
@@ -31,6 +35,7 @@ export interface Cliente {
   agencia: string | null
   conta: string | null
   convenio: string | null
+  margem_disponivel: number | null
   data_cadastro: string | null
   data_nascimento: string | null
   usuario_id: string | null
@@ -48,6 +53,7 @@ export const emptyForm = {
   agencia: '',
   conta: '',
   convenio: '',
+  margem_disponivel: '',
   data_cadastro: new Date().toISOString().split('T')[0],
   data_nascimento: '',
 }
@@ -357,6 +363,7 @@ export function useClientes() {
       agencia: c.agencia || '',
       conta: c.conta || '',
       convenio: c.convenio || '',
+      margem_disponivel: c.margem_disponivel?.toString() || '',
       data_cadastro: c.data_cadastro || new Date().toISOString().split('T')[0],
       data_nascimento: c.data_nascimento || '',
     })
@@ -389,6 +396,19 @@ export function useClientes() {
 
     const cpfMascara = maskCPF(cpfLimpo)
     const nomeFormatado = formatarNomeProprio(formData.nome)
+    const margemDisponivel = formData.margem_disponivel.trim() === ''
+      ? null
+      : Number(formData.margem_disponivel)
+
+    if (margemDisponivel !== null && !Number.isFinite(margemDisponivel)) {
+      setErroForm('Informe uma margem disponível válida.')
+      return
+    }
+
+    if (isConvenioConsignado(formData.convenio) && margemDisponivel === null) {
+      setErroForm('Informe a margem disponível para clientes de convênio consignado.')
+      return
+    }
 
     setSaving(true)
 
@@ -419,6 +439,7 @@ export function useClientes() {
             agencia: formData.agencia || null,
             conta: formData.conta || null,
             convenio: formData.convenio || null,
+            margem_disponivel: margemDisponivel,
             data_cadastro: formData.data_cadastro,
             data_nascimento: formData.data_nascimento || null,
           })
@@ -451,6 +472,7 @@ export function useClientes() {
             agencia: formData.agencia || null,
             conta: formData.conta || null,
             convenio: formData.convenio || null,
+            margem_disponivel: margemDisponivel,
             data_cadastro: formData.data_cadastro,
             data_nascimento: formData.data_nascimento || null,
             usuario_id: usuario.id,

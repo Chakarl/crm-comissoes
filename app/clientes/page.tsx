@@ -60,9 +60,10 @@ export default function ClientesPage() {
       cliente.telefone || '',
       cliente.cpf || '',
       cliente.convenio || '',
+      cliente.margem_disponivel ?? '',
     ])
     const planilha = XLSX.utils.aoa_to_sheet([
-      ['Data', 'Nome do cliente', 'Telefone', 'CPF', 'Convênio'],
+      ['Data', 'Nome do cliente', 'Telefone', 'CPF', 'Convênio', 'Margem disponível (R$)'],
       ...linhas,
     ])
 
@@ -72,6 +73,7 @@ export default function ClientesPage() {
       { wch: 18 },
       { wch: 18 },
       { wch: 24 },
+      { wch: 22 },
     ]
 
     const arquivo = XLSX.utils.book_new()
@@ -316,6 +318,7 @@ export default function ClientesPage() {
                   <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Promotor</th>
                 )}
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Convênio</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Margem disponível</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Agência</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Conta</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Telefone</th>
@@ -362,6 +365,9 @@ export default function ClientesPage() {
                         '—'
                       )}
                     </td>
+                    <td className="px-6 py-4 text-slate-700">
+                      {c.margem_disponivel === null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
                     <td className="px-6 py-4 text-slate-700">{c.agencia || '—'}</td>
                     <td className="px-6 py-4 text-slate-700">{c.conta || '—'}</td>
                     <td className="px-6 py-4 text-slate-700">
@@ -399,7 +405,7 @@ export default function ClientesPage() {
               {ctx.fatia.length === 0 && (
                 <tr>
                   <td
-                    colSpan={ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' ? 11 : 10}
+                    colSpan={ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' ? 12 : 11}
                     className="px-6 py-12 text-center text-slate-500"
                   >
                     <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
@@ -485,6 +491,12 @@ export default function ClientesPage() {
                     ) : (
                       <span className="text-slate-700">—</span>
                     )}
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Margem disponível:</span>{' '}
+                    <span className="text-slate-700">
+                      {c.margem_disponivel === null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500">Agência:</span>{' '}

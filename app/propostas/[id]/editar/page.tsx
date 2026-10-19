@@ -6,6 +6,7 @@ import { useUsuario } from '@/hooks/useUsuario'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { isTipoPropostaConsignado } from '@/lib/consignado'
 
 export default function EditarPropostaPage() {
   const { usuario, loading: loadingUser } = useUsuario()
@@ -25,6 +26,7 @@ export default function EditarPropostaPage() {
     tipo_proposta_codigo: '',
     nome_cliente: '',
     valor_contratado: '',
+    valor_parcela: '',
     taxa_juros: '',
     prazo: '',
   })
@@ -70,16 +72,27 @@ export default function EditarPropostaPage() {
       tipo_proposta_codigo: data.tipo_proposta_codigo || '',
       nome_cliente: data.nome_cliente || '',
       valor_contratado: data.valor_contratado?.toString() || '',
+      valor_parcela: data.valor_parcela?.toString() || '',
       taxa_juros: data.taxa_juros?.toString() || '',
       prazo: data.prazo?.toString() || '',
     })
     setLoading(false)
   }
 
+  const tipoSelecionado = tipos.find((tipo) => tipo.codigo === form.tipo_proposta_codigo)
+  const propostaConsignada = isTipoPropostaConsignado(tipoSelecionado)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setErro(null)
+
+    const valorParcela = form.valor_parcela.trim() ? Number(form.valor_parcela) : null
+    if (propostaConsignada && (!valorParcela || !Number.isFinite(valorParcela) || valorParcela <= 0)) {
+      setErro('Informe um valor de parcela maior que zero para a contratação consignada.')
+      setSaving(false)
+      return
+    }
 
     const { error } = await supabase
       .from('propostas')
@@ -89,6 +102,7 @@ export default function EditarPropostaPage() {
         tipo_proposta_codigo: form.tipo_proposta_codigo,
         nome_cliente: form.nome_cliente,
         valor_contratado: parseFloat(form.valor_contratado),
+        valor_parcela: valorParcela,
         taxa_juros: form.taxa_juros ? parseFloat(form.taxa_juros) : null,
         prazo: form.prazo ? parseInt(form.prazo) : null,
       })
@@ -102,7 +116,6 @@ export default function EditarPropostaPage() {
     }
     setSaving(false)
   }
-
   const categorias = tipos.reduce<Record<string, any[]>>((acc, t) => {
     if (!acc[t.categoria]) acc[t.categoria] = []
     acc[t.categoria].push(t)
@@ -232,6 +245,19 @@ export default function EditarPropostaPage() {
             />
           </div>
 
+          <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+            <label className="block text-sm font-medium mb-1">Valor da Parcela (R$)</label>
+            <input
+              required={propostaConsignada}
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={form.valor_parcela}
+              onChange={(e) => setForm({ ...form, valor_parcela: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+              placeholder="Obrigatório para consignado"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               Taxa de Juros (% a.m)

@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
       telefone,
       agencia,
       conta,
+      margem_disponivel,
       created_at,
       usuario_id,
       propostas(count)
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { nome, cpf, telefone, agencia, conta } = body
+  const { nome, cpf, telefone, agencia, conta, margem_disponivel } = body
 
   if (!nome) {
     return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 })
@@ -95,6 +96,11 @@ export async function POST(req: NextRequest) {
 
   if (!cpf) {
     return NextResponse.json({ error: 'CPF é obrigatório.' }, { status: 400 })
+  }
+
+  const margem = margem_disponivel == null || margem_disponivel === '' ? null : Number(margem_disponivel)
+  if (margem !== null && !Number.isFinite(margem)) {
+    return NextResponse.json({ error: 'Margem disponível inválida.' }, { status: 400 })
   }
 
   const { data: existing } = await supabase
@@ -117,6 +123,7 @@ export async function POST(req: NextRequest) {
       telefone,
       agencia,
       conta,
+      margem_disponivel: margem,
       usuario_id: usuario.id,
     })
     .select()

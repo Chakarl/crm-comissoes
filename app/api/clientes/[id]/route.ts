@@ -74,6 +74,7 @@ export async function GET(
       telefone,
       agencia,
       conta,
+      margem_disponivel,
       created_at,
       propostas (
         id,
@@ -81,6 +82,7 @@ export async function GET(
         tipo_proposta_codigo,
         data_proposta,
         valor_proposta,
+        valor_parcela,
         prazo_meses,
         status
       )
@@ -110,7 +112,7 @@ export async function PUT(
 
   const body = await req.json()
 
-  const { nome, cpf, telefone, agencia, conta } = body
+  const { nome, cpf, telefone, agencia, conta, margem_disponivel } = body
 
   if (!nome) {
     return NextResponse.json({ error: 'Nome é obrigatório.' }, { status: 400 })
@@ -136,9 +138,23 @@ export async function PUT(
     }
   }
 
+  const margem = Object.prototype.hasOwnProperty.call(body, 'margem_disponivel')
+    ? margem_disponivel == null || margem_disponivel === '' ? null : Number(margem_disponivel)
+    : undefined
+  if (margem !== undefined && margem !== null && !Number.isFinite(margem)) {
+    return NextResponse.json({ error: 'Margem disponível inválida.' }, { status: 400 })
+  }
+
   let updateQuery = supabase
     .from('clientes')
-    .update({ nome, cpf, telefone, agencia, conta })
+    .update({
+      nome,
+      cpf,
+      telefone,
+      agencia,
+      conta,
+      ...(margem !== undefined ? { margem_disponivel: margem } : {}),
+    })
     .eq('id', id)
   if (!usuario.is_master) updateQuery = updateQuery.eq('usuario_id', usuario.id)
   const { data, error } = await updateQuery.select().maybeSingle()
