@@ -366,7 +366,7 @@ export default function ClientesPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-slate-700">
-                      {c.margem_disponivel === null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      {c.margem_disponivel == null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                     <td className="px-6 py-4 text-slate-700">{c.agencia || '—'}</td>
                     <td className="px-6 py-4 text-slate-700">{c.conta || '—'}</td>
@@ -495,7 +495,7 @@ export default function ClientesPage() {
                   <div>
                     <span className="text-slate-500">Margem disponível:</span>{' '}
                     <span className="text-slate-700">
-                      {c.margem_disponivel === null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      {c.margem_disponivel == null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </span>
                   </div>
                   <div>

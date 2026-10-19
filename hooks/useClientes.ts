@@ -213,11 +213,11 @@ export function useClientes() {
       { data: propostasData, error: erroPropostas },
     ] = await Promise.all([queryClientes, queryPropostas])
 
-    if (erroClientes || erroPropostas) {
-      const error = erroClientes || erroPropostas
+    const error = erroClientes ?? erroPropostas
+    if (error) {
       console.error('Erro ao carregar clientes e propostas:', error)
       setClientes([])
-      setErroCarregamento('Não foi possível carregar clientes e contratações. Tente novamente.')
+      setErroCarregamento(`Não foi possível carregar clientes e contratações: ${error.message}. Tente novamente.`)
       setLoading(false)
       return
     }

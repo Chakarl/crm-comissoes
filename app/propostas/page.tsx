@@ -33,6 +33,7 @@ export default function PropostasPage() {
   const { usuario, loading: loadingUser } = useUsuario()
   const [propostas, setPropostas] = useState<Proposta[]>([])
   const [loading, setLoading] = useState(true)
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [pagina, setPagina] = useState(1)
   const [mesFiltro, setMesFiltro] = useState<string | null>(null)
@@ -89,27 +90,62 @@ export default function PropostasPage() {
   const loadPropostas = async () => {
     if (!usuario) return
     setLoading(true)
+    setErroCarregamento(null)
 
-    let query = supabase
+    let queryComParcela = supabase
       .from('propostas')
-      .select(
-        'id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, valor_parcela, prazo, comissao_total, usuario_id'
-      )
+      .select('id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, valor_parcela, prazo, comissao_total, usuario_id')
       .order('data_proposta', { ascending: false })
 
     if (!usuario.is_master) {
-      query = query.eq('usuario_id', usuario.id)
+      queryComParcela = queryComParcela.eq('usuario_id', usuario.id)
     } else if (promotorFiltro !== 'todos') {
-      query = query.eq('usuario_id', promotorFiltro)
+      queryComParcela = queryComParcela.eq('usuario_id', promotorFiltro)
+    }    const resultado = await queryComParcela
+
+    if (!resultado.error) {
+      setPropostas(resultado.data || [])
+      setLoading(false)
+      return
     }
 
-    const { data, error } = await query
+    const colunaParcelaAusente = resultado.error.message.includes('valor_parcela') &&
+      (resultado.error.code === '42703' || resultado.error.code === 'PGRST204')
 
-    if (error) console.error('Erro ao carregar propostas:', error)
-    if (data) setPropostas(data)
+    if (colunaParcelaAusente) {
+      let querySemParcela = supabase
+        .from('propostas')
+        .select('id, numero_proposta, tipo_proposta_codigo, data_proposta, nome_cliente, valor_contratado, prazo, comissao_total, usuario_id')
+        .order('data_proposta', { ascending: false })
+
+      if (!usuario.is_master) {
+        querySemParcela = querySemParcela.eq('usuario_id', usuario.id)
+      } else if (promotorFiltro !== 'todos') {
+        querySemParcela = querySemParcela.eq('usuario_id', promotorFiltro)
+      }      const resultadoLegado = await querySemParcela
+
+      if (!resultadoLegado.error) {
+        setPropostas((resultadoLegado.data || []).map((proposta) => ({
+          ...proposta,
+          valor_parcela: null,
+        })))
+        setErroCarregamento('As propostas foram carregadas, mas a coluna de parcela ainda não existe no banco. Aplique a migração do consignado para ativar a margem e o valor da parcela.')
+        setLoading(false)
+        return
+      }
+
+      console.error('Erro ao carregar propostas sem a coluna de parcela:', resultadoLegado.error)
+      setPropostas([])
+      setErroCarregamento(`Não foi possível carregar propostas: ${resultadoLegado.error.message}`)
+      setLoading(false)
+      return
+    }
+
+    console.error('Erro ao carregar propostas:', resultado.error)
+    setPropostas([])
+    setErroCarregamento(`Não foi possível carregar propostas: ${resultado.error.message}`)
     setLoading(false)
   }
-
   // ═══════════════════════════════════════════════════════════
   //  EXCLUSÃO — remove só parcelas pendentes, mantém as pagas
   // ═══════════════════════════════════════════════════════════
@@ -234,6 +270,17 @@ export default function PropostasPage() {
           </Link>
         </div>
 
+        {erroCarregamento && (
+          <div role="alert" className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <p className="text-sm font-medium">{erroCarregamento}</p>
+            <button
+              onClick={loadPropostas}
+              className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
         {/* ── Filtro por Promotor (master only) ── */}
         {usuario?.is_master && (
           <div className="flex items-center gap-3 mb-6">
