@@ -230,6 +230,7 @@ export default function ClientesPage() {
         {/* Filtro por contratação, convênio e período */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="flex flex-col items-start gap-4">
+            <div className="flex flex-wrap items-center gap-4 lg:gap-8">
             {/* Situação da contratação */}
             <div className="flex items-center gap-2">
               <FileCheck2 className="w-4 h-4 text-blue-500" />
@@ -273,6 +274,8 @@ export default function ClientesPage() {
             </div>
 
             {/* Período */}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <CalendarDays className="w-4 h-4 text-blue-500" />
               <span className="text-sm font-medium text-slate-600">Período:</span>
