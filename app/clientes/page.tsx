@@ -246,7 +246,7 @@ export default function ClientesPage() {
                     ctx.setSituacaoContratacao(value)
                   }
                 }}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="min-w-0 flex-1 sm:flex-none sm:min-w-[240px] border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="todos">Todos os clientes</option>
                 <option value="contratou">Com proposta registrada</option>
@@ -261,7 +261,7 @@ export default function ClientesPage() {
               <select
                 value={ctx.convenioFiltro}
                 onChange={(e) => ctx.setConvenioFiltro(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="min-w-0 flex-1 sm:flex-none sm:min-w-[240px] border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="todos">Todos</option>
                 {CONVENIOS.map((c) => (
@@ -273,21 +273,21 @@ export default function ClientesPage() {
             </div>
 
             {/* Período */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               <CalendarDays className="w-4 h-4 text-blue-500" />
               <span className="text-sm font-medium text-slate-600">Período:</span>
               <input
                 type="date"
                 value={ctx.dataInicio}
                 onChange={(e) => ctx.setDataInicio(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full sm:w-auto border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <span className="text-sm text-slate-400">até</span>
               <input
                 type="date"
                 value={ctx.dataFim}
                 onChange={(e) => ctx.setDataFim(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full sm:w-auto border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               {(ctx.dataInicio || ctx.dataFim) && (
                 <button
@@ -305,226 +305,70 @@ export default function ClientesPage() {
           </div>
         </div>
 
-        {/* Desktop Table */}
-        <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Data</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Nome</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">CPF</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Idade</th>
-                {ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' && (
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Promotor</th>
-                )}
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Convênio</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Margem disponível</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Agência</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Conta</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Telefone</th>
-                <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ctx.fatia.map((c) => {
-                const aniver = c.data_nascimento ? isAniversarioHoje(c.data_nascimento) : false
-                return (
-                  <tr
-                    key={c.id}
-                    className={`border-b border-slate-100 hover:bg-slate-50 ${aniver ? 'bg-amber-50/60' : ''}`}
-                  >
-                    <td className="px-6 py-4 text-slate-700">
-                      {c.data_cadastro
-                        ? new Date(c.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR')
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      <div className="flex items-center gap-2">
-                        {c.nome}
-                        {aniver && <span title="Aniversariante do dia!">🎂</span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-700">{c.cpf || '—'}</td>
-                    <td className="px-6 py-4 text-slate-700">
-                      {c.data_nascimento ? `${calcularIdade(c.data_nascimento)} anos` : '—'}
-                    </td>
-                    {ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' && (
-                      <td className="px-6 py-4 text-slate-700">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
-                          {(c.usuario_id && ctx.nomePromotorMap[c.usuario_id]) || '—'}
-                        </span>
-                      </td>
-                    )}
-                    {/* ✅ BADGE CONVÊNIO — DESKTOP (cor dinâmica) */}
-                    <td className="px-6 py-4 text-slate-700">
-                      {c.convenio ? (
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${corConvenio(c.convenio)}`}>
-                          {c.convenio}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700">
-                      {c.margem_disponivel == null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700">{c.agencia || '—'}</td>
-                    <td className="px-6 py-4 text-slate-700">{c.conta || '—'}</td>
-                    <td className="px-6 py-4 text-slate-700">
-                      {formatarTelefoneExibicao(c.telefone)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => ctx.abrirEditar(c)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`Excluir o cliente "${c.nome}"?`))
-                              ctx.handleDelete(c.id)
-                          }}
-                          disabled={ctx.deletando === c.id}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="Excluir"
-                        >
-                          {ctx.deletando === c.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-              {ctx.fatia.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' ? 12 : 11}
-                    className="px-6 py-12 text-center text-slate-500"
-                  >
-                    <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                    <p className="font-medium">Nenhum cliente encontrado</p>
-                    <p className="text-sm mt-1">
-                      Ajuste os filtros ou cadastre um novo cliente.
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Cards */}
-        <div className="lg:hidden space-y-3">
+        <div className="space-y-4">
           {ctx.fatia.map((c) => {
             const aniver = c.data_nascimento ? isAniversarioHoje(c.data_nascimento) : false
             return (
-              <div
+              <article
                 key={c.id}
-                className={`bg-white rounded-xl border p-4 ${
-                  aniver ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200'
-                }`}
+                className={aniver
+                  ? 'bg-amber-50/40 rounded-2xl border border-amber-300 p-5 sm:p-6 shadow-sm transition-shadow hover:shadow-md'
+                  : 'bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm transition-shadow hover:shadow-md'}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-base sm:text-lg text-slate-900 flex items-center gap-2">
                       {c.nome}
-                      {aniver && <span>🎂</span>}
+                      {aniver && <span title="Aniversariante do dia!">&#127874;</span>}
                     </h3>
-                    <p className="text-sm text-slate-500">{c.cpf || 'Sem CPF'}</p>
+                    <p className="text-sm text-slate-500 mt-0.5">{c.cpf || 'Sem CPF'}</p>
                     {ctx.usuario?.is_master && ctx.promotorFiltro === 'todos' && (
                       <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
                         {(c.usuario_id && ctx.nomePromotorMap[c.usuario_id]) || '—'}
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => ctx.abrirEditar(c)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                    >
+                  <div className="flex shrink-0 gap-1">
+                    <button onClick={() => ctx.abrirEditar(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => {
-                        if (confirm(`Excluir "${c.nome}"?`)) ctx.handleDelete(c.id)
+                        if (confirm('Excluir o cliente "' + c.nome + '"?')) ctx.handleDelete(c.id)
                       }}
                       disabled={ctx.deletando === c.id}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="Excluir"
                     >
-                      {ctx.deletando === c.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
+                      {ctx.deletando === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm sm:text-base">
+                  <div><span className="text-slate-500">Data:</span>{' '}<span className="text-slate-700">{c.data_cadastro ? new Date(c.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
+                  <div><span className="text-slate-500">Idade:</span>{' '}<span className="text-slate-700">{c.data_nascimento ? calcularIdade(c.data_nascimento) + ' anos' : '—'}</span></div>
                   <div>
-                    <span className="text-slate-500">Data:</span>{' '}
-                    <span className="text-slate-700">
-                      {c.data_cadastro
-                        ? new Date(c.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR')
-                        : '—'}
-                    </span>
+                    <span className="text-slate-500">Conv&ecirc;nio:</span>{' '}
+                    {c.convenio ? <span className={'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + corConvenio(c.convenio)}>{c.convenio}</span> : <span className="text-slate-700">—</span>}
                   </div>
-                  <div>
-                    <span className="text-slate-500">Idade:</span>{' '}
-                    <span className="text-slate-700">
-                      {c.data_nascimento ? `${calcularIdade(c.data_nascimento)} anos` : '—'}
-                    </span>
-                  </div>
-                  {/* ✅ BADGE CONVÊNIO — MOBILE (cor dinâmica) */}
-                  <div>
-                    <span className="text-slate-500">Convênio:</span>{' '}
-                    {c.convenio ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${corConvenio(c.convenio)}`}>
-                        {c.convenio}
-                      </span>
-                    ) : (
-                      <span className="text-slate-700">—</span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Margem disponível:</span>{' '}
-                    <span className="text-slate-700">
-                      {c.margem_disponivel == null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Agência:</span>{' '}
-                    <span className="text-slate-700">{c.agencia || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Conta:</span>{' '}
-                    <span className="text-slate-700">{c.conta || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Telefone:</span>{' '}
-                    <span className="text-slate-700">
-                      {formatarTelefoneExibicao(c.telefone)}
-                    </span>
-                  </div>
+                  <div><span className="text-slate-500">Margem dispon&iacute;vel:</span>{' '}<span className="text-slate-700">{c.margem_disponivel == null ? '—' : c.margem_disponivel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                  <div><span className="text-slate-500">Ag&ecirc;ncia:</span>{' '}<span className="text-slate-700">{c.agencia || '—'}</span></div>
+                  <div><span className="text-slate-500">Conta:</span>{' '}<span className="text-slate-700">{c.conta || '—'}</span></div>
+                  <div><span className="text-slate-500">Telefone:</span>{' '}<span className="text-slate-700">{formatarTelefoneExibicao(c.telefone)}</span></div>
                 </div>
-              </div>
+              </article>
             )
           })}
           {ctx.fatia.length === 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 shadow-sm">
               <UsersIcon className="w-12 h-12 mx-auto mb-3 text-slate-300" />
               <p className="font-medium">Nenhum cliente encontrado</p>
+              <p className="text-sm mt-1">Ajuste os filtros ou cadastre um novo cliente.</p>
             </div>
           )}
         </div>
 
-        {/* Paginação */}
+
         {ctx.totalPaginas > 1 && (
           <div className="mt-6">
             <Paginacao

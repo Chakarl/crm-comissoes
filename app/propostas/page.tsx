@@ -362,14 +362,14 @@ export default function PropostasPage() {
                 type="date"
                 value={dataInicio}
                 onChange={(e) => setDataInicio(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+                className="border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
               />
               <span className="text-sm text-slate-400 hidden sm:inline">até</span>
               <input
                 type="date"
                 value={dataFim}
                 onChange={(e) => setDataFim(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+                className="border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
               />
               {(dataInicio || dataFim) && (
                 <button
@@ -387,207 +387,49 @@ export default function PropostasPage() {
           </div>
         </div>
 
-        {/* Desktop Table */}
-        <div className="hidden lg:block bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Número
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Cliente
-                </th>
-                {usuario?.is_master && promotorFiltro === 'todos' && (
-                  <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                    Promotor
-                  </th>
-                )}
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Tipo
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Data
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Valor
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Parcela
-
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">
-                  Comissão
-                </th>
-                <th className="text-center px-6 py-4 text-sm font-semibold text-slate-700">
-                  Ações
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {fatia.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-slate-100 hover:bg-slate-50"
-                >
-                  <td className="px-6 py-4 font-medium text-slate-900">
-                    {p.numero_proposta}
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">
-                    {p.nome_cliente}
-                  </td>
-                  {usuario?.is_master && promotorFiltro === 'todos' && (
-                    <td className="px-6 py-4 text-slate-600 text-sm">
-                      {nomePromotorMap[p.usuario_id] || '—'}
-                    </td>
-                  )}
-                  <td className="px-6 py-4">
+        <div className="space-y-4">
+          {fatia.map((p) => (
+            <article key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm transition-shadow hover:shadow-md">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="text-sm font-mono text-slate-500">#{p.numero_proposta}</span>
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
                       {nomeTipoMap[p.tipo_proposta_codigo] || p.tipo_proposta_codigo}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">
-                    {new Date(
-                      p.data_proposta + 'T00:00:00'
-                    ).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">
-                    {p.valor_contratado.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">
-                    {p.valor_parcela == null ? "—" : p.valor_parcela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-green-700">
-                    {p.comissao_total.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <Link
-                        href={`/propostas/${p.id}/editar`}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(p.id, p.numero_proposta)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {fatia.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={usuario?.is_master && promotorFiltro === 'todos' ? 9 : 8}
-                    className="px-6 py-12 text-center text-slate-500"
-                  >
-                    Nenhuma proposta encontrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Cards */}
-        <div className="lg:hidden space-y-3">
-          {fatia.map((p) => (
-            <div
-              key={p.id}
-              className="bg-white rounded-xl border border-slate-200 p-4"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono text-slate-400">
-                      #{p.numero_proposta}
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                      {nomeTipoMap[p.tipo_proposta_codigo] || p.tipo_proposta_codigo}
-                    </span>
                   </div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    {p.nome_cliente}
-                  </div>
+                  <h3 className="font-semibold text-base sm:text-lg text-slate-900">{p.nome_cliente}</h3>
                   {usuario?.is_master && promotorFiltro === 'todos' && (
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      Promotor: {nomePromotorMap[p.usuario_id] || '—'}
-                    </div>
+                    <p className="text-sm text-slate-500 mt-0.5">Promotor: {nomePromotorMap[p.usuario_id] || '—'}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Link
-                    href={`/propostas/${p.id}/editar`}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                  >
+                <div className="flex shrink-0 gap-1">
+                  <Link href={'/propostas/' + p.id + '/editar'} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
                     <Pencil className="w-4 h-4" />
                   </Link>
-                  <button
-                    onClick={() => handleDelete(p.id, p.numero_proposta)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                  >
+                  <button onClick={() => handleDelete(p.id, p.numero_proposta)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-slate-500">Data:</span>{' '}
-                  <span className="text-slate-700">
-                    {new Date(
-                      p.data_proposta + 'T00:00:00'
-                    ).toLocaleDateString('pt-BR')}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Valor:</span>{' '}
-                  <span className="text-slate-700">
-                    {p.valor_contratado.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
-                  </span>
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm sm:text-base">
+                <div><span className="text-slate-500">Data:</span>{' '}<span className="text-slate-700">{new Date(p.data_proposta + 'T00:00:00').toLocaleDateString('pt-BR')}</span></div>
+                <div><span className="text-slate-500">Valor:</span>{' '}<span className="text-slate-700">{p.valor_contratado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
                 {p.valor_parcela != null && (
-                  <div>
-                    <span className="text-slate-500">Parcela:</span>{' '}
-                    <span className="text-slate-700">
-                      {p.valor_parcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </span>
-                  </div>
-                )}                <div className="col-span-2">
-                  <span className="text-slate-500">Comissão:</span>{' '}
-                  <span className="font-semibold text-green-700">
-                    {p.comissao_total.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
-                  </span>
-                </div>
+                  <div><span className="text-slate-500">Parcela:</span>{' '}<span className="text-slate-700">{p.valor_parcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                )}
+                <div><span className="text-slate-500">Comiss&atilde;o:</span>{' '}<span className="font-semibold text-emerald-600">{p.comissao_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
               </div>
-            </div>
+            </article>
           ))}
-
           {fatia.length === 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 shadow-sm">
               Nenhuma proposta encontrada.
             </div>
           )}
         </div>
 
-        {/* Paginação */}
+
         {totalPaginas > 1 && (
           <div className="mt-6">
             <Paginacao
