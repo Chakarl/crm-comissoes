@@ -229,7 +229,7 @@ export default function ClientesPage() {
 
         {/* Filtro por contratação, convênio e período */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-8">
+          <div className="flex flex-col items-start gap-4">
             {/* Situação da contratação */}
             <div className="flex items-center gap-2">
               <FileCheck2 className="w-4 h-4 text-blue-500" />
