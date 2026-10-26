@@ -118,7 +118,7 @@ export default function ClienteForm({ cliente, onSuccess }: ClienteFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Margem disponível (R$)</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Margem dispon&iacute;vel (R$) (opcional)</label>
         <input
           type="number"
           step="0.01"

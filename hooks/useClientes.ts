@@ -23,10 +23,6 @@ export const CONVENIOS = [
   'CRÉDITO TRABALHADOR',
 ]
 
-export function isConvenioConsignado(convenio: string | null | undefined): boolean {
-  return Boolean(convenio && (convenio.startsWith('CONSIGNADO/') || convenio === 'CRÉDITO TRABALHADOR'))
-}
-
 export interface Cliente {
   id: string
   nome: string
@@ -402,11 +398,6 @@ export function useClientes() {
 
     if (margemDisponivel !== null && !Number.isFinite(margemDisponivel)) {
       setErroForm('Informe uma margem disponível válida.')
-      return
-    }
-
-    if (isConvenioConsignado(formData.convenio) && margemDisponivel === null) {
-      setErroForm('Informe a margem disponível para clientes de convênio consignado.')
       return
     }
 

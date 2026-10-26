@@ -5,7 +5,6 @@ import {
   ClienteComData,
   FormData,
   CONVENIOS,
-  isConvenioConsignado,
   maskCPF,
   maskTelefone,
   calcularIdade,
@@ -93,13 +92,12 @@ export function ClienteModal({
           {/* Margem do consignado */}
           <div>
             <label className="block text-sm font-semibold text-blue-900 mb-1">
-              Margem consignável disponível (R$){isConvenioConsignado(formData.convenio) && <span className="text-red-500"> *</span>}
+              Margem consignável disponível (R$) (opcional)
             </label>
             <input
               type="number"
               step="0.01"
               inputMode="decimal"
-              required={isConvenioConsignado(formData.convenio)}
               value={formData.margem_disponivel}
               onChange={(e) => setFormData({ ...formData, margem_disponivel: e.target.value })}
               className="w-full px-4 py-2.5 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"

@@ -137,6 +137,10 @@ export function PropostaForm() {
       return;
     }
 
+    setClienteEncontrado(false);
+    setClienteId(null);
+    setClienteMargem(null);
+
     const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
 
     const timeout = setTimeout(async () => {
@@ -152,7 +156,9 @@ export function PropostaForm() {
         if (data) {
           setClienteEncontrado(true);
           setClienteId(data.id);
-          setClienteMargem(data.margem_disponivel == null ? null : Number(data.margem_disponivel));
+          setClienteMargem(
+            data.margem_disponivel == null ? null : Number(data.margem_disponivel)
+          );
           setForm((prev) => ({
             ...prev,
             nome_cliente: data.nome || prev.nome_cliente,
@@ -163,7 +169,7 @@ export function PropostaForm() {
         } else {
           setClienteEncontrado(false);
           setClienteId(null);
-      setClienteMargem(null);
+          setClienteMargem(null);
         }
       } catch (err) {
         console.error("Erro busca CPF:", err);
@@ -214,12 +220,16 @@ export function PropostaForm() {
       const valor = precisaValor ? parseBRL(form.valor_contratado) : (valorFixo ?? 0);
       const valorParcela = form.valor_parcela.trim() ? parseBRL(form.valor_parcela) : null;
       const margemInicialCliente = form.margem_inicial_cliente.trim() ? Number(form.margem_inicial_cliente) : null;
+      if (
+        form.margem_inicial_cliente.trim() &&
+        (margemInicialCliente === null ||
+          !Number.isFinite(margemInicialCliente) ||
+          margemInicialCliente < 0)
+      ) {
+        throw new Error("Informe uma margem disponível válida, maior ou igual a zero.");
+      }
       if (propostaConsignada && (!valorParcela || valorParcela <= 0)) {
         throw new Error("Informe um valor de parcela maior que zero para a contratação consignada.");
-      }
-
-      if (propostaConsignada && clienteEncontrado && clienteMargem === null) {
-        throw new Error("Este cliente ainda não tem margem disponível cadastrada. Atualize o cadastro do cliente antes de salvar a contratação.");
       }
       if (precisaValor && valor <= 0) throw new Error("Informe um valor contratado válido.");
 
@@ -238,44 +248,99 @@ export function PropostaForm() {
 
       // ---------- CLIENTE ----------
       const cpfMascara = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
-      let idCliente = clienteId;
+      const { data: clienteExistente, error: erroExistente } = await supabase
+        .from("clientes")
+        .select("id, margem_disponivel")
+        .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (erroExistente) throw erroExistente;
+
+      let idCliente = clienteExistente?.id || clienteId;
+      let margemAtual =
+        clienteExistente?.margem_disponivel == null
+          ? null
+          : Number(clienteExistente.margem_disponivel);
+
+      if (
+        propostaConsignada &&
+        !clienteExistente &&
+        !idCliente &&
+        (margemInicialCliente === null || margemInicialCliente < valorParcela!)
+      ) {
+        throw new Error(
+          "Informe a margem disponível inicial do cliente. Ela precisa ser igual ou maior que o valor da parcela."
+        );
+      }
 
       if (!idCliente) {
-        const { data: existente, error: erroExistente } = await supabase
+        const { data: novoCli, error: errCli } = await supabase
           .from("clientes")
+          .insert({
+            nome: formatarNomeProprio(form.nome_cliente),
+            cpf: cpfMascara,
+            telefone: form.telefone_cliente.replace(/\D/g, "") || null,
+            agencia: form.agencia_cliente || null,
+            conta: form.conta_cliente || null,
+            margem_disponivel: margemInicialCliente,
+            data_cadastro: form.data_proposta,
+            usuario_id: usuario.id,
+          })
           .select("id, margem_disponivel")
-          .or(`cpf.eq.${cpfMascara},cpf.eq.${cpfLimpo}`)
-          .limit(1)
-          .maybeSingle();
+          .single();
+        if (errCli) throw errCli;
+        idCliente = novoCli.id;
+        margemAtual =
+          novoCli.margem_disponivel == null
+            ? null
+            : Number(novoCli.margem_disponivel);
+      }
 
-        if (erroExistente) throw erroExistente;
-
-        if (existente) {
-          if (propostaConsignada && existente.margem_disponivel == null) {
-            throw new Error("Este cliente ainda não tem margem disponível cadastrada. Atualize o cadastro do cliente antes de salvar a contratação.");
+      if (propostaConsignada) {
+        if (margemAtual === null) {
+          if (margemInicialCliente === null || margemInicialCliente < valorParcela!) {
+            throw new Error(
+              "Este cliente não tem margem cadastrada. Informe uma margem disponível igual ou maior que a parcela para continuar."
+            );
           }
-          idCliente = existente.id;
-        } else {
-          if (propostaConsignada && (!form.margem_inicial_cliente.trim() || !Number.isFinite(margemInicialCliente))) {
-            throw new Error("Informe a margem disponível inicial do novo cliente.");
-          }
 
-          const { data: novoCli, error: errCli } = await supabase
+          const { data: clienteAtualizado, error: erroMargem } = await supabase
             .from("clientes")
-            .insert({
-              nome: formatarNomeProprio(form.nome_cliente),
-              cpf: cpfMascara,
-              telefone: form.telefone_cliente.replace(/\D/g, "") || null,
-              agencia: form.agencia_cliente || null,
-              conta: form.conta_cliente || null,
-              margem_disponivel: margemInicialCliente,
-              data_cadastro: form.data_proposta,
-              usuario_id: usuario.id,
-            })
-            .select("id")
-            .single();
-          if (errCli) throw errCli;
-          idCliente = novoCli.id;
+            .update({ margem_disponivel: margemInicialCliente })
+            .eq("id", idCliente)
+            .is("margem_disponivel", null)
+            .select("margem_disponivel")
+            .maybeSingle();
+
+          if (erroMargem) throw erroMargem;
+
+          if (clienteAtualizado) {
+            margemAtual = Number(clienteAtualizado.margem_disponivel);
+          } else {
+            const { data: clienteRecarregado, error: erroRecarregar } = await supabase
+              .from("clientes")
+              .select("margem_disponivel")
+              .eq("id", idCliente)
+              .maybeSingle();
+
+            if (erroRecarregar) throw erroRecarregar;
+            margemAtual =
+              clienteRecarregado?.margem_disponivel == null
+                ? null
+                : Number(clienteRecarregado.margem_disponivel);
+          }
+        }
+
+        if (margemAtual === null) {
+          throw new Error(
+            "Não foi possível salvar a margem do cliente. Verifique suas permissões e tente novamente."
+          );
+        }
+        if (margemAtual < valorParcela!) {
+          throw new Error(
+            `Margem disponível insuficiente. Saldo atual: ${margemAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`
+          );
         }
       }
       // ---------- PROPOSTA ----------
@@ -488,9 +553,12 @@ export function PropostaForm() {
           )}
         </div>
 
-        {!clienteEncontrado && (
+        {!clienteEncontrado || (propostaConsignada && clienteMargem === null) ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4">
-            <label className="block text-sm font-medium mb-1">Margem consignável disponível do cliente (R$)</label>
+            <label className="block text-sm font-medium mb-1">
+              Margem consignável disponível do cliente (R$)
+              {!propostaConsignada && " (opcional)"}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -501,9 +569,19 @@ export function PropostaForm() {
               className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm bg-white"
               placeholder="Ex: 500,00"
             />
-            <p className="mt-1 text-xs text-slate-600">Preencha para novo cliente consignado. A parcela será abatida após salvar.</p>
+            <p className="mt-1 text-xs text-slate-600">Se informada, a parcela será abatida da margem após salvar.</p>
           </div>
-        )}
+        ) : propostaConsignada && clienteMargem !== null ? (
+          <p className="text-sm text-gray-600">
+            Margem disponível:{" "}
+            <strong>
+              {clienteMargem.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+            </strong>
+          </p>
+        ) : null}
         {/* Nome */}
         <div>
           <label className="block text-sm font-medium mb-1">Nome do Cliente</label>
